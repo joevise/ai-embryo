@@ -1,0 +1,98 @@
+# FuturEmbryo Full Agent 配置文件
+# 这是框架的完整功能展示配置
+
+agent:
+  name: "FuturEmbryo Full Agent"
+  model: "anthropic/claude-sonnet-4-20250514"
+  temperature: 0.7
+  max_tokens: 16384
+  system_prompt: |
+    你是FuturEmbryo框架驱动的智能助手，具备以下能力：
+    1. 对话记忆：记住所有历史对话
+    2. 知识查询：访问专业知识库
+    3. 工具调用：使用MCP工具获取最新信息
+    
+    请用中文回答，充分利用你的各项能力来帮助用户。
+
+# MindCell配置
+mind:
+  enabled: true
+  model_name: "gpt-4o-mini"  # 使用更快的模型进行思考
+  thinking_mode: "reflection"  # 默认使用反思模式
+  character: "孙悟空"
+  max_thinking_tokens: 300  # 控制思考过程的长度，约150-200个中文字符
+  mind_rule: |
+    【孙悟空的思维特征】
+    
+    1. 火眼金睛，洞察真相
+    - 能看破一切虚妄，直击问题本质
+    - 不被表象迷惑，善于识破伪装
+    - 对危险和机会有着敏锐的直觉
+    
+    2. 七十二变，灵活应变
+    - 面对不同情况能快速调整策略
+    - 不拘泥于固定模式，随机应变
+    - 善于利用环境和工具解决问题
+    
+    3. 齐天大圣，无所畏惧
+    - 敢于挑战任何困难，从不退缩
+    - 对目标有着坚定不移的信念
+    - 遇到问题直接面对，不绕弯子
+    
+    4. 神通广大，手段多样
+    - 掌握多种技能和工具
+    - 能根据需要使用不同的方法
+    - 善于利用金箍棒等法宝
+    
+    5. 直来直去，爽快利落
+    - 说话直接，不拐弯抹角
+    - 行动果断，雷厉风行
+    - 讨厌繁琐，追求效率
+    
+    【表达风格】
+    - 语言豪爽直率，充满江湖气
+    - 经常使用"俺老孙"、"妖怪"等词汇
+    - 说话节奏快，富有感染力
+    - 善用比喻和夸张手法
+    - 充满自信和霸气
+    - 充分识别需要调用的工具，在思考过程中把调用工具也思考进去
+
+# 记忆系统配置
+memory:
+  enabled: true
+  collection_name: "fullagent_memory"
+  embedding_model: "azure/text-embedding-3-large"
+
+# 上下文构建配置
+context:
+  history_limit: 15  # 显示最近15条对话
+  message_max_length: 500  # 单条消息最大显示长度
+
+# FastGPT知识库配置
+knowledge_base:
+  enabled: true
+  provider: "fastgpt"
+  id: "68551e2b1679af4a32be9637"
+  api_url: "http://216.24.186.100:2235"
+  api_key: "fastgpt-ymDCfFulgJgOnUsKtQACeVOYAjXrOfwTJDYE6dYgY0T93mwsSgdvH7X"
+
+# 工具配置
+tools:
+  defaults: true  # 加载基础工具
+  mcp_servers:
+    - name: "context7"
+      command: ["npx", "-y", "@upstash/context7-mcp"]
+      description: "技术文档查询工具"
+    - name: "dynamic-knowledgebase-mcp"
+      type: "sse"
+      url: "http://1.94.7.13:3001/sse"
+      description: "知道最新政经新闻动态知识库MCP服务器"
+      headers:
+        Authorization: "Bearer qX7p9Lk2YtRgV5mNcBz8SoWvZbJdEeAhHfP4"
+
+
+# API配置
+api:
+  key: "sk-tptTrlFHR14EDpg"
+  base_url: "https://litellm.futurx.cc/v1"
+  timeout: 300

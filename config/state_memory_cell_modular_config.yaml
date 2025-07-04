@@ -1,0 +1,54 @@
+# StateMemoryCell 模块化配置文件
+# 支持动态加载适配器，无需修改核心代码
+
+# 基础配置
+routing_strategy: "priority"  # priority | parallel | fallback
+result_aggregation: "merge"   # merge | best | weighted
+max_results_per_adapter: 10
+enable_caching: true
+cache_ttl: 300  # 5分钟
+
+# 适配器配置列表
+adapters:
+  # FastGPT 知识库适配器
+  - name: "fastgpt_main"
+    class_path: "futurembryo.adapters.fastgpt_adapter.FastGPTAdapter"
+    config:
+      enabled: true
+      priority: 10
+      supported_query_types: ["general", "factual", "knowledge"]
+      
+      # FastGPT 服务配置
+      base_url: "http://localhost:3000"
+      api_key: "your_fastgpt_api_key_here"
+      dataset_id: "your_dataset_id_here"
+      
+      # 搜索配置
+      default_limit: 5000
+      default_similarity: 0.0
+      search_mode: "embedding"  # embedding | fullTextRecall | mixedRecall
+      using_rerank: false
+      
+      # 问题优化配置
+      extension_query: true
+      extension_model: "gpt-4o-mini"
+      extension_bg: ""
+
+  # 可以添加更多适配器
+  # - name: "another_adapter"
+  #   class_path: "futurembryo.adapters.another_adapter.AnotherAdapter"
+  #   config:
+  #     enabled: true
+  #     priority: 5
+  #     # ... 其他配置
+
+# 示例：多个FastGPT实例
+# - name: "fastgpt_secondary"
+#   class_path: "futurembryo.adapters.fastgpt_adapter.FastGPTAdapter"
+#   config:
+#     enabled: true
+#     priority: 5
+#     supported_query_types: ["procedural"]
+#     base_url: "http://another-fastgpt:3000"
+#     api_key: "another_api_key"
+#     dataset_id: "another_dataset_id" 
