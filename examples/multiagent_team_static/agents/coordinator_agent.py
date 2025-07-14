@@ -12,8 +12,8 @@ from typing import Dict, Any, List, Optional
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from futurembryo.cells.llm_cell import LLMCell
-from cells.user_memory_cell import UserMemoryCell
-from cells.mention_processor_cell import MentionProcessorCell
+from futurembryo.adapters.user_profile_adapter import UserProfileAdapter
+from futurembryo.cells.mention_processor_cell import MentionProcessorCell
 
 
 class CoordinatorAgent:
@@ -41,7 +41,7 @@ class CoordinatorAgent:
         
         # 用户记忆（共享）
         user_memory_config = config.get("user_memory", {})
-        self.user_memory = UserMemoryCell(user_memory_config)
+        self.user_memory = UserProfileAdapter(user_memory_config)
         
         # @引用处理（共享）
         mention_config = config.get("mention_system", {})

@@ -23,7 +23,7 @@ from futurembryo.cells.tool_cell import ToolCell
 from futurembryo.core.tool_registry import ToolRegistry, create_default_registry
 from futurembryo.core.tool_config import ToolConfigManager, ToolsConfig, FunctionToolConfig
 # 延迟导入避免循环依赖
-from core.context_builder import ContextBuilder
+from futurembryo.core.context_builder import ContextBuilder
 
 
 class DynamicAgentFactory:

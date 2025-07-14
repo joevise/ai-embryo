@@ -151,13 +151,28 @@ class StateMemoryCell(Cell):
         
         Args:
             context: 包含以下字段：
-                - action: 操作类型 ("search", "get_adapters", "set_state", "get_state")
+                - action: 操作类型 ("search", "get_adapters", "set_state", "get_state", 
+                         "get_user_profile", "update_user_profile", "get_user_preferences", 
+                         "learn_preference", "add_user_memory", "get_user_memories", 
+                         "process_user_input", "handle_mention")
                 - query: 搜索查询
-                - query_type: 查询类型 ("general", "factual", "procedural", etc.)
+                - query_type: 查询类型 ("general", "factual", "procedural", "user_profile", 
+                             "user_preferences", "user_memory", "personal", "context", "learning")
                 - limit: 结果限制
                 - adapters: 指定使用的适配器列表
                 - routing_strategy: 临时路由策略
                 - key/value: 会话状态操作
+                - user_id: 用户ID (用户相关操作)
+                - updates: 用户画像更新数据
+                - category: 偏好类别
+                - preference: 偏好项
+                - feedback: 偏好反馈分数
+                - content: 记忆内容
+                - memory_type: 记忆类型
+                - importance: 重要性
+                - tags: 标签
+                - mention: @引用ID
+                - user_input: 用户输入文本
                 
         Returns:
             Dict包含操作结果
@@ -165,6 +180,7 @@ class StateMemoryCell(Cell):
         action = context.get("action", "search")
         
         try:
+            # 核心记忆操作
             if action == "search":
                 return self._search_memory(context)
             elif action == "get_adapters":
@@ -175,6 +191,13 @@ class StateMemoryCell(Cell):
                 return self._get_state(context)
             elif action == "clear_cache":
                 return self._clear_cache()
+            
+            # 用户感知操作 - 优先路由到用户画像适配器
+            elif action in ["get_user_profile", "update_user_profile", "get_user_preferences", 
+                           "learn_preference", "add_user_memory", "get_user_memories", 
+                           "process_user_input", "handle_mention"]:
+                return self._handle_user_aware_action(context)
+            
             else:
                 # 转发到适配器
                 return self._forward_to_adapters(context)
@@ -442,6 +465,43 @@ class StateMemoryCell(Cell):
                 "error": "No adapters specified for forwarding"
             }
     
+    def _handle_user_aware_action(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        """处理用户感知操作 - 智能路由到用户画像适配器"""
+        action = context.get("action")
+        
+        # 查找用户画像适配器
+        user_profile_adapter = None
+        for adapter_name, adapter in self.adapters.items():
+            if hasattr(adapter, 'adapter_type') and adapter.adapter_type == "user_profile":
+                user_profile_adapter = adapter
+                break
+        
+        if not user_profile_adapter:
+            # 如果没有用户画像适配器，尝试查找任何支持用户操作的适配器
+            for adapter_name, adapter in self.adapters.items():
+                if adapter.can_handle(context):
+                    user_profile_adapter = adapter
+                    break
+        
+        if user_profile_adapter:
+            try:
+                return user_profile_adapter.process(context)
+            except Exception as e:
+                self.logger.error(f"User-aware action '{action}' failed on adapter: {e}")
+                return {
+                    "success": False,
+                    "error": f"User-aware action failed: {str(e)}",
+                    "action": action,
+                    "adapter_type": getattr(user_profile_adapter, 'adapter_type', 'unknown')
+                }
+        else:
+            return {
+                "success": False,
+                "error": f"No suitable adapter found for user-aware action: {action}",
+                "action": action,
+                "suggestion": "Consider adding a UserProfileAdapter to handle user-aware operations"
+            }
+    
     def _get_adapters_info(self) -> Dict[str, Any]:
         """获取适配器信息"""
         adapters_info = []
@@ -582,6 +642,131 @@ class StateMemoryCell(Cell):
     def get_state_value(self, key: str, default: Any = None) -> Any:
         """便捷的状态获取方法"""
         return self.session_state.get(key, default)
+    
+    # 用户感知便捷方法
+    def get_user_profile(self, user_id: str = None) -> Dict[str, Any]:
+        """便捷的用户画像获取方法"""
+        result = self.process({
+            "action": "get_user_profile",
+            "user_id": user_id
+        })
+        if result["success"]:
+            return result["data"]
+        else:
+            raise Exception(f"Get user profile failed: {result.get('error', 'Unknown error')}")
+    
+    def update_user_profile(self, updates: Dict[str, Any], user_id: str = None) -> Dict[str, Any]:
+        """便捷的用户画像更新方法"""
+        result = self.process({
+            "action": "update_user_profile",
+            "updates": updates,
+            "user_id": user_id
+        })
+        if result["success"]:
+            return result["data"]
+        else:
+            raise Exception(f"Update user profile failed: {result.get('error', 'Unknown error')}")
+    
+    def get_user_preferences(self, category: str = None, user_id: str = None) -> Dict[str, Any]:
+        """便捷的用户偏好获取方法"""
+        context = {
+            "action": "get_user_preferences",
+            "user_id": user_id
+        }
+        if category:
+            context["category"] = category
+        
+        result = self.process(context)
+        if result["success"]:
+            return result["data"]
+        else:
+            raise Exception(f"Get user preferences failed: {result.get('error', 'Unknown error')}")
+    
+    def learn_user_preference(self, category: str, preference: str, feedback: float, user_id: str = None) -> Dict[str, Any]:
+        """便捷的用户偏好学习方法"""
+        result = self.process({
+            "action": "learn_preference",
+            "category": category,
+            "preference": preference,
+            "feedback": feedback,
+            "user_id": user_id
+        })
+        if result["success"]:
+            return result["data"]
+        else:
+            raise Exception(f"Learn user preference failed: {result.get('error', 'Unknown error')}")
+    
+    def add_user_memory(self, content: str, memory_type: str = "learned", importance: float = 0.5,
+                       tags: List[str] = None, context: Dict[str, Any] = None, user_id: str = None) -> Dict[str, Any]:
+        """便捷的用户记忆添加方法"""
+        request_context = {
+            "action": "add_user_memory",
+            "content": content,
+            "memory_type": memory_type,
+            "importance": importance,
+            "user_id": user_id
+        }
+        if tags:
+            request_context["tags"] = tags
+        if context:
+            request_context["context"] = context
+        
+        result = self.process(request_context)
+        if result["success"]:
+            return result["data"]
+        else:
+            raise Exception(f"Add user memory failed: {result.get('error', 'Unknown error')}")
+    
+    def get_user_memories(self, memory_type: str = None, tags: List[str] = None, 
+                         limit: int = 10, user_id: str = None) -> List[Dict[str, Any]]:
+        """便捷的用户记忆获取方法"""
+        context = {
+            "action": "get_user_memories",
+            "limit": limit,
+            "user_id": user_id
+        }
+        if memory_type:
+            context["memory_type"] = memory_type
+        if tags:
+            context["tags"] = tags
+        
+        result = self.process(context)
+        if result["success"]:
+            return result["data"]["results"]
+        else:
+            raise Exception(f"Get user memories failed: {result.get('error', 'Unknown error')}")
+    
+    def process_user_input(self, user_input: str, conversation_context: Dict[str, Any] = None, user_id: str = None) -> Dict[str, Any]:
+        """便捷的用户输入处理方法"""
+        context = {
+            "action": "process_user_input",
+            "user_input": user_input,
+            "user_id": user_id
+        }
+        if conversation_context:
+            context["conversation_context"] = conversation_context
+        
+        result = self.process(context)
+        if result["success"]:
+            return result["data"]
+        else:
+            raise Exception(f"Process user input failed: {result.get('error', 'Unknown error')}")
+    
+    def handle_mention(self, mention: str, mention_context: Dict[str, Any] = None, user_id: str = None) -> Dict[str, Any]:
+        """便捷的@引用处理方法"""
+        context = {
+            "action": "handle_mention",
+            "mention": mention,
+            "user_id": user_id
+        }
+        if mention_context:
+            context["context"] = mention_context
+        
+        result = self.process(context)
+        if result["success"]:
+            return result["data"]
+        else:
+            raise Exception(f"Handle mention failed: {result.get('error', 'Unknown error')}")
     
     def add_adapter(self, name: str, class_path: str, config: Dict[str, Any] = None):
         """动态添加适配器"""

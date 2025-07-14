@@ -18,7 +18,7 @@ sys.path.insert(0, str(project_root))
 from futurembryo.cells.llm_cell import LLMCell
 from futurembryo.cells.tool_cell import ToolCell
 from futurembryo.core.cell import Cell
-from core.context_builder import ContextBuilder
+from futurembryo.core.context_builder import ContextBuilder
 
 
 class UserAwareAgent:

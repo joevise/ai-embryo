@@ -18,7 +18,7 @@ sys.path.insert(0, str(project_root))
 
 from futurembryo.cells.llm_cell import LLMCell
 from futurembryo.cells.tool_cell import ToolCell
-from core.context_builder import ContextBuilder
+from futurembryo.core.context_builder import ContextBuilder
 from core.dynamic_agent_factory import get_dynamic_agent_factory, create_agent_from_ai_design
 from agents.user_aware_agent_v2 import UserAwareAgent
 

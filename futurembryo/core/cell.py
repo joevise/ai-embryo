@@ -1,13 +1,14 @@
 """
 Cell抽象基类 - FuturEmbryo框架的基石
 
-定义所有Cell的基础接口和行为
+定义所有Cell的基础接口和行为，支持同步和异步操作
 """
 import time
 import uuid
 import logging
+import asyncio
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Union, Awaitable
 from .state import CellState
 from .config import get_config
 from .exceptions import CellExecutionError, CellTimeoutError, CellConfigurationError
@@ -65,6 +66,21 @@ class Cell(ABC):
             Dict[str, Any]: 处理结果字典
         """
         pass
+    
+    async def process_async(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        异步处理逻辑 - 子类可以重写以提供原生异步支持
+        默认实现会将同步process方法包装为异步
+        
+        Args:
+            context: 输入上下文字典
+            
+        Returns:
+            Dict[str, Any]: 处理结果字典
+        """
+        # 默认实现：在线程池中执行同步方法
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.process, context)
     
     def __call__(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -125,6 +141,80 @@ class Cell(ABC):
             return self._format_response(
                 None, execution_time, success=False, error=str(e)
             )
+    
+    async def __call_async__(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        异步统一调用接口 - 自动处理状态管理、错误处理、日志记录
+        
+        Args:
+            context: 输入上下文字典
+            
+        Returns:
+            Dict[str, Any]: 包含处理结果和元数据的字典
+        """
+        start_time = time.time()
+        self.execution_count += 1
+        
+        try:
+            # 状态转换：IDLE -> STARTING
+            self._set_state(CellState.STARTING)
+            self.logger.info(f"Starting async execution #{self.execution_count}")
+            
+            # 输入验证
+            validated_context = self._validate_input(context)
+            
+            # 状态转换：STARTING -> PROCESSING
+            self._set_state(CellState.PROCESSING)
+            
+            # 执行核心逻辑（异步带超时控制）
+            result = await self._execute_async_with_timeout(validated_context)
+            
+            # 状态转换：PROCESSING -> COMPLETING
+            self._set_state(CellState.COMPLETING)
+            
+            # 输出验证
+            validated_result = self._validate_output(result)
+            
+            # 状态转换：COMPLETING -> COMPLETED
+            self._set_state(CellState.COMPLETED)
+            
+            # 记录执行时间
+            execution_time = time.time() - start_time
+            self.last_execution_time = execution_time
+            self.total_execution_time += execution_time
+            
+            self.logger.info(f"Async execution completed in {execution_time:.3f}s")
+            
+            # 返回标准格式结果
+            return self._format_response(validated_result, execution_time, success=True)
+            
+        except Exception as e:
+            # 状态转换：ANY -> ERROR
+            self._set_state(CellState.ERROR)
+            self.last_error = e
+            
+            execution_time = time.time() - start_time
+            error_msg = f"Async execution failed after {execution_time:.3f}s: {str(e)}"
+            self.logger.error(error_msg)
+            
+            # 返回错误格式结果
+            return self._format_response(
+                None, execution_time, success=False, error=str(e)
+            )
+    
+    async def _execute_async_with_timeout(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        """异步执行带超时控制"""
+        try:
+            # 使用asyncio.wait_for进行超时控制
+            result = await asyncio.wait_for(
+                self.process_async(context), 
+                timeout=self.timeout
+            )
+            return result
+        except asyncio.TimeoutError:
+            raise CellTimeoutError(self.name, self.timeout)
+        except Exception as e:
+            raise CellExecutionError(self.name, str(e), e)
     
     def _set_state(self, new_state: CellState):
         """设置Cell状态"""
