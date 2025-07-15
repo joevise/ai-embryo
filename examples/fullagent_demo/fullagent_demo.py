@@ -16,6 +16,7 @@ import sys
 import yaml
 import asyncio
 import json
+import logging
 from pathlib import Path
 
 # 添加项目路径
@@ -38,6 +39,9 @@ class FullAgent:
         
         print(f"🚀 启动 {self.config['agent']['name']}")
         
+        # 0. 初始化logger
+        self.logger = logging.getLogger(__name__)
+        
         # 1. 初始化对话历史
         self.conversation_history = []
         
@@ -51,49 +55,28 @@ class FullAgent:
             })
             print("📚 FastGPT知识库已连接")
         
-        # 3. 初始化上下文构建器（统一管理所有组件）
+        # 3. 先创建ToolCell，包含MCP服务器配置
+        tool_cell_config = {
+            "auto_load_defaults": self.config['tools']['defaults'],
+            "mcp_servers": self.config['tools']['mcp_servers']
+        }
+        self.tool_cell = ToolCell(config=tool_cell_config)
+        
+        # 4. 初始化上下文构建器（统一管理所有组件）
         self.context_builder = IntelligentContextBuilder(
-            max_tokens=self.config['agent']['max_tokens'] * 0.7,  # 为LLM响应预留空间
-            compression_threshold=0.8,
-            conversation_history_limit=self.config.get('context', {}).get('history_limit', 15),
-            message_max_length=self.config.get('context', {}).get('message_max_length', 500)
+            user_id=f"user_{self.config['agent']['name']}",
+            enable_memory=self.config['memory']['enabled'],
+            memory_collection=self.config['memory']['collection_name'],
+            tool_cell=self.tool_cell,  # 传递已配置的ToolCell
+            enable_user_profile=False,  # 暂时禁用用户画像功能
+            enable_mentions=False       # 暂时禁用@引用功能
         )
         
-        # 4. 配置各组件的配置信息
-        context_config = {
-            "mind_cell": {
-                "model_name": self.config.get('mind', {}).get('model_name', 'gpt-4'),
-                "api_key": self.config['api']['key'],
-                "base_url": self.config['api']['base_url'],
-                "timeout": self.config['api']['timeout'],
-                "max_thinking_tokens": self.config.get('mind', {}).get('max_thinking_tokens', 1000),
-                "thinking_modes": {
-                    "reflection": True,
-                    "chain_of_thought": True,
-                    "analysis": True
-                }
-            } if self.config.get('mind', {}).get('enabled', False) else {},
-            
-            "memory_cell": {
-                "embedding_model": self.config['memory']['embedding_model'],
-                "collection_name": self.config['memory']['collection_name'],
-                "db_path": "./memory_db"
-            } if self.config['memory']['enabled'] else {},
-            
-            "tool_cell": {
-                "auto_load_defaults": self.config['tools']['defaults'],
-                "mcp_servers": self.config['tools']['mcp_servers']
-            }
-        }
-        
-        # 5. 初始化上下文构建器的各组件
-        self.context_builder.initialize_components(context_config)
-        
-        # 6. 保存mind_rule用于上下文构建
+        # 5. 保存mind_rule用于上下文构建
         self.mind_rule = self.config.get('mind', {}).get('mind_rule', '')
         self.default_thinking_mode = self.config.get('mind', {}).get('thinking_mode', 'reflection')
         
-        # 7. 创建独立的LLM Cell
+        # 6. 创建独立的LLM Cell
         llm_config = {
             "api_key": self.config['api']['key'],
             "base_url": self.config['api']['base_url'],
@@ -106,10 +89,10 @@ class FullAgent:
         self.llm = LLMCell(
             model_name=self.config['agent']['model'],
             config=llm_config,
-            tool_cell=self.context_builder.tool_cell
+            tool_cell=self.tool_cell
         )
         
-        # 8. 注册自定义工具到ToolCell
+        # 7. 注册自定义工具到ToolCell
         if hasattr(self, 'knowledge'):
             self._register_knowledge_tool()
         self._register_memory_tool()
@@ -130,7 +113,7 @@ class FullAgent:
                 print(f"❌ 知识库查询失败: {e}")
                 return {"success": False, "error": str(e)}
         
-        registry = self.context_builder.tool_cell.get_tool_registry()
+        registry = self.tool_cell.get_tool_registry()
         registry.register_function(
             name="query_knowledge",
             description="查询专业知识库，获取准确的专业信息",
@@ -163,7 +146,7 @@ class FullAgent:
                 "summary": f"我们总共对话了{len(self.conversation_history)//2}轮"
             }
         
-        registry = self.context_builder.tool_cell.get_tool_registry()
+        registry = self.tool_cell.get_tool_registry()
         registry.register_function(
             name="query_memory",
             description="查询我们的对话历史记忆",
@@ -197,43 +180,42 @@ class FullAgent:
         if len(self.conversation_history) > 50:  # 保留最近10轮对话
             self.conversation_history = self.conversation_history[-50:]
         
-        # 3. 使用IntelligentContextBuilder构建完整上下文
-        full_context = await self.context_builder.build_full_context(
+        # 3. 使用ContextBuilder构建完整上下文
+        mind_enabled = self.config.get('mind', {}).get('enabled', False)
+        additional_context = {
+            "knowledge_base_enabled": self.config['knowledge_base']['enabled'],
+            "mind_enabled": mind_enabled
+        }
+        
+        # 只有当mind启用时才传递相关配置
+        if mind_enabled:
+            additional_context.update({
+                "mind_rule": self.mind_rule,
+                "thinking_mode": self.default_thinking_mode
+            })
+        
+        full_context = await self.context_builder.build_context(
             user_input=user_input,
             conversation_history=self.conversation_history,
-            # 组件开关
-            enable_thinking=self.config.get('mind', {}).get('enabled', False),
-            enable_memory=self.config['memory']['enabled'], 
-            enable_tools=True,
-            enable_compression=True,
-            # 具体配置
-            thinking_mode=self.default_thinking_mode,
-            memory_search_mode="hybrid",
-            mind_rule=self.mind_rule,
-            # 额外上下文
-            additional_context={
-                "knowledge_base_enabled": self.config['knowledge_base']['enabled']
-            }
+            additional_context=additional_context
         )
         
-        # 4. 提取思考指导来构建增强的系统提示
-        thinking_guidance = self.context_builder.extract_thinking_guidance(full_context)
-        enhanced_system_prompt = self.context_builder.build_enhanced_system_prompt(
-            original_system_prompt=self.config['agent']['system_prompt'],
-            thinking_guidance=thinking_guidance,
-            mind_rule=self.mind_rule
-        )
+        # 4. 格式化上下文为LLM可理解的格式
+        formatted_context = self.context_builder.format_context_for_llm(full_context)
         
-        # 5. 构建完整的消息上下文
-        formatted_context = self.context_builder._format_context_for_llm(full_context)
+        # 5. 构建系统提示
+        system_prompt = self.config['agent']['system_prompt']
+        # 只有当mind启用时才添加思考指导
+        if mind_enabled and self.mind_rule:
+            system_prompt += f"\n\n思考指导：{self.mind_rule}"
         
         # 6. 使用LLM进行对话（使用完整上下文）
         messages = [
-            {"role": "system", "content": enhanced_system_prompt},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"{formatted_context}\n\n用户当前输入：{user_input}"}
         ]
         
-        # 7. 使用纯异步链处理 - 所有组件都在同一个async task中
+        # 7. 使用LLM进行对话处理
         try:
             # 直接使用LLMCell的异步方法，确保整个调用链在同一task中
             response_result = await self.llm._handle_conversation_with_tools(
@@ -248,7 +230,13 @@ class FullAgent:
             self.llm.logger.error(f"纯异步链处理失败: {e}")
             response = f"抱歉，我遇到了技术问题：{str(e)}"
         
-        # 8. 保存回复到记忆
+        # 8. 保存交互到上下文构建器的记忆中
+        try:
+            await self.context_builder.save_interaction(user_input, response)
+        except Exception as e:
+            self.logger.error(f"保存交互记忆失败: {e}")
+        
+        # 9. 保存回复到记忆
         self.conversation_history.append({"role": "assistant", "content": response})
         
         return response
