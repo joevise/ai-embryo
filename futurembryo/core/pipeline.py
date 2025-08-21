@@ -364,14 +364,40 @@ class Pipeline(Cell):
         # 构建Pipeline级别的最终响应
         successful_results = [r for r in results if r.get("success", False)]
         if successful_results:
-            # 选择最终输出：优先writer/summarizer，否则最后一个成功步骤
+            # 智能选择最终输出：优先选择有意义内容的步骤
             final_step = None
-            for result in reversed(successful_results):
+            
+            # 1. 优先选择LLMCell的响应（通常包含最有意义的内容）
+            for result in successful_results:
                 step_name_lower = result.get("step_name", "").lower()
-                if any(keyword in step_name_lower for keyword in ["writer", "summarizer", "final"]):
+                response = result.get("response", "")
+                # 检查是否是LLMCell且有有意义的响应
+                if ("llmcell" in step_name_lower and 
+                    response and 
+                    len(response) > 50 and 
+                    not response.startswith("{")):  # 避免选择JSON格式的响应
                     final_step = result
                     break
             
+            # 2. 如果没有找到合适的LLMCell，寻找writer/summarizer等
+            if not final_step:
+                for result in reversed(successful_results):
+                    step_name_lower = result.get("step_name", "").lower()
+                    response = result.get("response", "")
+                    if (any(keyword in step_name_lower for keyword in ["writer", "summarizer", "final"]) and
+                        response and len(response) > 50):
+                        final_step = result
+                        break
+            
+            # 3. 最后选择第一个有意义内容的步骤
+            if not final_step:
+                for result in successful_results:
+                    response = result.get("response", "")
+                    if response and len(response) > 50 and not response.startswith("{"):
+                        final_step = result
+                        break
+            
+            # 4. 如果还是没有，选择最后一个成功步骤
             if not final_step:
                 final_step = successful_results[-1]
             

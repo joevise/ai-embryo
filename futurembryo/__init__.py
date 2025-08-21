@@ -4,7 +4,7 @@ FuturEmbryo - AI智能体框架
 受生物学启发的智能体组合框架
 """
 
-__version__ = "0.1.0"
+__version__ = "0.3.0c"
 
 # 核心组件
 from .core import (

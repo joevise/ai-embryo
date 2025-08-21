@@ -1,0 +1,32 @@
+{
+  "test_session": {
+    "start_time": 1755353791.327533,
+    "total_time": 20.80278515815735,
+    "framework_version": "FuturEmbryo v2.1c"
+  },
+  "results": {
+    "level1_basic_life": {
+      "success": true,
+      "execution_time": 20.802504062652588,
+      "config": {
+        "level": "level1_basic_life",
+        "enabled": true,
+        "timeout": 30,
+        "retry_count": 3,
+        "success_criteria": {
+          "response_rate": 1.0,
+          "basic_config_valid": 1.0,
+          "iert_elements_valid": 1.0,
+          "life_card_generated": 1.0
+        },
+        "test_scenarios": [
+          "简单问候对话",
+          "基础问答交互",
+          "配置参数验证",
+          "生命元素检查"
+        ]
+      },
+      "timestamp": 1755353812.130135
+    }
+  }
+}
