@@ -1,0 +1,41 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ai-embryo"
+version = "1.1.0"
+description = "AI Embryo Engine — A biology-inspired framework for AI system evolution"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "FuturX Team"},
+]
+keywords = ["ai", "agent", "evolution", "genetic-algorithm", "llm"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = [
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+llm = ["openai>=1.0"]
+memory = ["chromadb>=0.4"]
+all = ["openai>=1.0", "chromadb>=0.4"]
+dev = ["pytest>=7.0"]
+
+[project.urls]
+Homepage = "https://github.com/joevise/ai-embryo"
+Repository = "https://github.com/joevise/ai-embryo"
+Issues = "https://github.com/joevise/ai-embryo/issues"
