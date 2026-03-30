@@ -2,6 +2,7 @@
 LLMCell — 语言模型调用细胞
 
 职责：调用 LLM，返回响应。支持 OpenAI 兼容接口。
+自动从 Genome 的 identity.mind + prompt traits 编译系统提示词。
 """
 
 from __future__ import annotations
@@ -28,53 +29,54 @@ except ImportError:
 class LLMCell(Cell):
     """LLM 调用细胞
     
-    配置项：
-        model: 模型名称 (默认 "gpt-4")
-        temperature: 温度 (默认 0.7)
-        max_tokens: 最大输出 token (默认 2000)
-        api_key: API Key (默认从环境变量)
+    配置项（优先从 config 取，其次从 _genome 注入）：
+        model: 模型名称
+        temperature: 温度
+        max_tokens: 最大输出 token
+        api_key: API Key
         base_url: API 基础 URL
-        system_prompt: 系统提示词
-        tools: Function Calling 工具定义列表
+        system_prompt: 系统提示词（如果不提供，自动从 genome 编译）
+        tools: Function Calling 工具定义列表（如果不提供，自动从 genome traits 编译）
     """
 
     def __init__(self, config: dict[str, Any] | None = None):
         super().__init__(config)
 
-        # 从配置或能力基因中获取参数
-        caps = self.config.get("_capabilities", {})
+        # 从 _genome 注入的信息（Embryo 发育时注入）
+        genome_data = self.config.get("_genome")
         
-        self.model = self.config.get("model") or caps.get("model", "gpt-4")
-        self.temperature = self.config.get("temperature") or caps.get("temperature", 0.7)
-        self.max_tokens = self.config.get("max_tokens") or caps.get("max_tokens", 2000)
+        # model_config
+        mc = self.config.get("_model_config", {})
+        self.model = self.config.get("model") or mc.get("model", "gpt-4")
+        self.temperature = self.config.get("temperature") or mc.get("temperature", 0.7)
+        self.max_tokens = self.config.get("max_tokens") or mc.get("max_tokens", 2000)
         
         self.api_key = self.config.get("api_key") or os.environ.get("OPENAI_API_KEY", "")
         self.base_url = self.config.get("base_url") or os.environ.get("OPENAI_BASE_URL")
         
-        # 从身份基因获取默认系统提示词
-        identity = self.config.get("_identity", {})
-        default_prompt = self._build_system_prompt(identity)
-        self.system_prompt = self.config.get("system_prompt", default_prompt)
-        
-        self.tools = self.config.get("tools") or caps.get("tools", [])
+        # 系统提示词：优先用显式配置，否则从 genome 自动编译
+        if "system_prompt" in self.config:
+            self.system_prompt = self.config["system_prompt"]
+        elif genome_data:
+            # 在 Embryo 发育时，genome 会被注入到 config["_genome"]
+            from ..genome import Genome
+            g = Genome()
+            g.identity = genome_data.get("identity", {})
+            g.blueprint = genome_data.get("blueprint", {})
+            self.system_prompt = g.compile_system_prompt()
+            # 自动编译工具
+            self._compiled_tools = g.compile_tools()
+        else:
+            # 从 _identity 构建基础提示词（向后兼容）
+            identity = self.config.get("_identity", {})
+            self.system_prompt = self._build_basic_prompt(identity)
+            self._compiled_tools = []
 
-        # 初始化客户端
+        self.tools = self.config.get("tools") or getattr(self, "_compiled_tools", [])
         self._client = None
 
     def process(self, input: dict[str, Any]) -> dict[str, Any]:
-        """调用 LLM
-        
-        Args:
-            input: 包含以下可选键：
-                - input: 用户输入文本
-                - messages: 完整消息历史 (优先)
-                - tools: 本次调用的工具定义
-                
-        Returns:
-            - response: LLM 的文本回复
-            - tool_calls: 工具调用请求列表 (如果有)
-            - usage: token 用量信息
-        """
+        """调用 LLM"""
         client = self._get_client()
         
         # 构建消息
@@ -85,7 +87,6 @@ class LLMCell(Cell):
             if self.system_prompt:
                 messages.append({"role": "system", "content": self.system_prompt})
             
-            # 加入之前的上下文
             if "previous_response" in input:
                 messages.append({"role": "assistant", "content": input["previous_response"]})
             
@@ -106,7 +107,7 @@ class LLMCell(Cell):
 
         # Function Calling
         tools = input.get("tools") or self.tools
-        if tools and isinstance(tools, list) and isinstance(tools[0], dict):
+        if tools and isinstance(tools, list) and len(tools) > 0 and isinstance(tools[0], dict):
             kwargs["tools"] = tools
 
         try:
@@ -119,7 +120,6 @@ class LLMCell(Cell):
                 "finish_reason": choice.finish_reason,
             }
 
-            # 工具调用
             if message.tool_calls:
                 result["tool_calls"] = [
                     {
@@ -130,7 +130,6 @@ class LLMCell(Cell):
                     for tc in message.tool_calls
                 ]
 
-            # 用量
             if response.usage:
                 result["usage"] = {
                     "prompt_tokens": response.usage.prompt_tokens,
@@ -147,9 +146,7 @@ class LLMCell(Cell):
         """获取或创建 OpenAI 客户端"""
         if self._client is None:
             if not HAS_OPENAI:
-                raise CellError(
-                    "需要安装 openai 包: pip install openai"
-                )
+                raise CellError("需要安装 openai 包: pip install openai")
             
             kwargs = {}
             if self.api_key:
@@ -158,29 +155,18 @@ class LLMCell(Cell):
                 kwargs["base_url"] = self.base_url
                 
             self._client = OpenAI(**kwargs)
-        
         return self._client
 
     @staticmethod
-    def _build_system_prompt(identity: dict[str, Any]) -> str:
-        """从身份基因构建默认系统提示词"""
+    def _build_basic_prompt(identity: dict[str, Any]) -> str:
+        """从身份基因构建基础系统提示词（向后兼容，无 mind 时使用）"""
         if not identity:
             return ""
-
         parts = []
-        
         purpose = identity.get("purpose", "")
         if purpose:
             parts.append(f"你的核心目标: {purpose}")
-
-        personality = identity.get("personality", [])
-        if personality:
-            parts.append(f"你的性格特征: {'、'.join(personality)}")
-
         constraints = identity.get("constraints", [])
         if constraints:
-            parts.append("约束条件:")
-            for c in constraints:
-                parts.append(f"  - {c}")
-
+            parts.append("约束条件:\n" + "\n".join(f"  - {c}" for c in constraints))
         return "\n".join(parts) if parts else ""

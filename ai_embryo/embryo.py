@@ -3,6 +3,11 @@ Embryo — 胚胎发育器
 
 唯一职责：把 Genome 变成 Organism。
 无状态，纯工厂。
+
+发育过程中会把 genome 信息注入给每个 Cell：
+- _genome: 完整基因组数据（identity + blueprint）
+- _model_config: 模型参数
+- _identity: 身份基因
 """
 
 from __future__ import annotations
@@ -17,11 +22,7 @@ from .exceptions import DevelopmentError
 
 
 class Embryo:
-    """胚胎 — 负责从基因组发育出生命体
-    
-    这是一个无状态工厂类，只做一件事：
-    Genome → Organism
-    """
+    """胚胎 — 负责从基因组发育出生命体"""
 
     @staticmethod
     def develop(genome: Genome) -> Organism:
@@ -30,27 +31,23 @@ class Embryo:
         步骤：
         1. 验证基因组
         2. 解析 Cell 定义
-        3. 实例化每个 Cell
+        3. 注入 genome 信息并实例化每个 Cell
         4. 确定组装方式
         5. 返回可运行的 Organism
-        
-        Args:
-            genome: 基因组
-            
-        Returns:
-            发育完成的生命体
-            
-        Raises:
-            DevelopmentError: 发育失败
         """
         try:
-            # 1. 验证
             genome.validate()
 
-            # 2-3. 实例化 Cells
             cell_defs = genome.blueprint.get("cells", [])
             if not cell_defs:
                 raise DevelopmentError("基因组中没有定义任何 Cell")
+
+            # 准备注入数据
+            genome_injection = {
+                "identity": genome.identity,
+                "blueprint": genome.blueprint,
+            }
+            model_config = genome.blueprint.get("model_config", {})
 
             cells: list[Cell] = []
             for i, cell_def in enumerate(cell_defs):
@@ -60,11 +57,11 @@ class Embryo:
                 # 解析变量引用
                 resolved_config = genome.resolve_references(raw_config)
                 
-                # 注入全局能力配置（让每个 Cell 都能访问）
-                resolved_config["_capabilities"] = genome.blueprint.get("capabilities", {})
+                # 注入 genome 数据（让 Cell 能访问完整信息）
+                resolved_config["_genome"] = genome_injection
+                resolved_config["_model_config"] = model_config
                 resolved_config["_identity"] = genome.identity
 
-                # 从注册表获取 Cell 类并实例化
                 try:
                     cell_class = CellRegistry.get(cell_type)
                 except Exception:
@@ -76,10 +73,8 @@ class Embryo:
                 cell = cell_class(config=resolved_config)
                 cells.append(cell)
 
-            # 4. 确定组装方式
             assembly = genome.blueprint.get("assembly", "sequential")
 
-            # 5. 构建 Organism
             organism = Organism(
                 genome=genome,
                 cells=cells,
