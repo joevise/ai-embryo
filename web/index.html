@@ -1,0 +1,1431 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Embryo Engine — Petri Dish</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0A0A0A;
+  --bg-card: #111;
+  --text: #E0E0E0;
+  --accent: #00FF41;
+  --accent-dim: rgba(0,255,65,0.3);
+  --orange: #FF6B35;
+  --border: #333;
+  --cyan: #00FFFF;
+  --blue: #4169E1;
+  --yellow: #FFD700;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  min-width: 800px;
+  overflow-x: hidden;
+}
+
+/* ── NAV ── */
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.nav-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--accent);
+  text-shadow: 0 0 10px var(--accent-dim);
+}
+.nav-title span { color: var(--text); font-weight: 400; }
+.nav-links { display: flex; gap: 8px; align-items: center; }
+.nav-link {
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  background: transparent;
+  transition: all 0.2s;
+}
+.nav-link:hover, .nav-link.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 8px var(--accent-dim);
+}
+.demo-toggle {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; color: #888;
+}
+.demo-toggle input { accent-color: var(--accent); }
+
+/* ── MAIN ── */
+.main { padding: 24px; max-width: 1200px; margin: 0 auto; }
+
+/* ── PETRI DISH ── */
+.petri-container {
+  position: relative;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+.petri-wrapper {
+  position: relative;
+  width: 600px;
+  height: 600px;
+}
+canvas#petri {
+  width: 600px;
+  height: 600px;
+  border-radius: 50%;
+  border: 2px solid #222;
+  box-shadow: 0 0 30px rgba(0,255,65,0.1), inset 0 0 60px rgba(0,0,0,0.8);
+  cursor: crosshair;
+}
+.scanline-overlay {
+  position: absolute;
+  top: 0; left: 0;
+  width: 600px; height: 600px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,255,65,0.015) 2px,
+    rgba(0,255,65,0.015) 4px
+  );
+}
+.gen-counter {
+  position: absolute;
+  top: 16px; right: 16px;
+  font-size: 11px;
+  color: var(--accent);
+  opacity: 0.7;
+  display: none;
+}
+
+/* ── CONTROLS ── */
+.controls {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-card);
+}
+.btn {
+  padding: 8px 18px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.btn:hover {
+  background: var(--accent);
+  color: #000;
+  box-shadow: 0 0 12px var(--accent-dim);
+}
+.btn.orange { border-color: var(--orange); color: var(--orange); }
+.btn.orange:hover { background: var(--orange); color: #000; box-shadow: 0 0 12px rgba(255,107,53,0.4); }
+.btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.btn:disabled:hover { background: transparent; color: var(--accent); }
+.selection-info {
+  font-size: 11px;
+  color: #888;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ── DETAILS PANEL ── */
+.details {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-card);
+  min-height: 200px;
+}
+.details-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  color: #888;
+}
+.details-body { padding: 16px; }
+.details-empty {
+  text-align: center;
+  padding: 40px;
+  color: #555;
+  font-size: 12px;
+}
+.details-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.info-section h4 {
+  color: var(--accent);
+  font-size: 11px;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.info-row { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px; }
+.info-label { color: #888; }
+.info-value { color: var(--text); }
+.trait-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 10px;
+  margin: 2px;
+  border: 1px solid;
+}
+.trait-badge.prompt { border-color: var(--accent); color: var(--accent); }
+.trait-badge.tool { border-color: var(--cyan); color: var(--cyan); }
+.trait-badge.behavior { border-color: var(--orange); color: var(--orange); }
+.trait-badge.skill { border-color: var(--yellow); color: var(--yellow); }
+
+/* Fitness chart */
+.fitness-chart {
+  width: 100%;
+  height: 80px;
+  margin-top: 8px;
+}
+
+/* ── CHAT ── */
+.chat-panel { display: none; }
+.chat-panel.visible { display: block; }
+.chat-messages {
+  height: 200px;
+  overflow-y: auto;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  margin-bottom: 8px;
+  background: #0D0D0D;
+}
+.chat-msg {
+  margin-bottom: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.chat-msg.user { color: var(--cyan); }
+.chat-msg.user::before { content: '> '; color: #555; }
+.chat-msg.bot { color: var(--text); padding-left: 8px; border-left: 2px solid var(--accent); }
+.chat-input-row { display: flex; gap: 8px; }
+.chat-input {
+  flex: 1;
+  padding: 8px 12px;
+  background: #0D0D0D;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  outline: none;
+}
+.chat-input:focus { border-color: var(--accent); }
+
+/* ── MODAL ── */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.85);
+  z-index: 200;
+  justify-content: center;
+  align-items: center;
+}
+.modal-overlay.visible { display: flex; }
+.modal {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  width: 600px;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 0 40px rgba(0,255,65,0.1);
+}
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.modal-header h3 { color: var(--accent); font-size: 14px; }
+.modal-close {
+  background: none;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  font-size: 18px;
+  font-family: inherit;
+}
+.modal-body { padding: 16px; }
+.yaml-editor {
+  width: 100%;
+  min-height: 300px;
+  background: #0D0D0D;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 12px;
+  padding: 12px;
+  resize: vertical;
+  outline: none;
+  tab-size: 2;
+}
+.modal-footer {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.evolve-config { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
+.evolve-config label { font-size: 12px; color: #888; }
+.evolve-config input {
+  width: 60px;
+  padding: 4px 8px;
+  background: #0D0D0D;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+}
+.evolve-log {
+  height: 200px;
+  overflow-y: auto;
+  padding: 12px;
+  background: #0D0D0D;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 11px;
+  color: #888;
+}
+.evolve-log .gen-line { margin-bottom: 4px; }
+.evolve-log .best { color: var(--accent); }
+
+/* ── STATUS BAR ── */
+.status-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0; right: 0;
+  padding: 4px 24px;
+  background: #0D0D0D;
+  border-top: 1px solid var(--border);
+  font-size: 10px;
+  color: #555;
+  display: flex;
+  justify-content: space-between;
+}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #555; }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-title">🧬 AI EMBRYO ENGINE <span>// Petri Dish</span></div>
+  <div class="nav-links">
+    <div class="demo-toggle">
+      <input type="checkbox" id="demoMode">
+      <label for="demoMode">Demo Mode</label>
+    </div>
+    <button class="nav-link active" data-view="petri">Petri Dish</button>
+    <button class="nav-link" data-view="lab">Lab</button>
+  </div>
+</nav>
+
+<!-- MAIN -->
+<div class="main">
+  <!-- Petri Dish Canvas -->
+  <div class="petri-container">
+    <div class="petri-wrapper">
+      <canvas id="petri" width="1200" height="1200"></canvas>
+      <div class="scanline-overlay"></div>
+      <div class="gen-counter" id="genCounter">GEN 0</div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <button class="btn" id="btnCreate" onclick="openCreateModal()">🥚 Create</button>
+    <button class="btn" id="btnCrossover" onclick="doCrossover()" disabled>🧬 Crossover</button>
+    <button class="btn orange" id="btnMutate" onclick="doMutate()" disabled>🔀 Mutate</button>
+    <button class="btn" id="btnEvolve" onclick="openEvolveModal()">🔄 Evolve</button>
+    <button class="btn" id="btnChat" onclick="toggleChat()" disabled>💬 Chat</button>
+    <span class="selection-info" id="selectionInfo">Click organisms to select (hold Shift for two)</span>
+  </div>
+
+  <!-- Details Panel -->
+  <div class="details" id="detailsPanel">
+    <div class="details-header">
+      <span id="detailsTitle">─── DETAILS ───</span>
+      <span id="detailsSubtitle"></span>
+    </div>
+    <div class="details-body" id="detailsBody">
+      <div class="details-empty">
+        ╭─────────────────────────────────────╮<br>
+        │  Select an organism to view details  │<br>
+        │  or create a new one with 🥚 Create  │<br>
+        ╰─────────────────────────────────────╯
+      </div>
+    </div>
+    <!-- Chat Panel -->
+    <div class="chat-panel" id="chatPanel">
+      <div class="chat-messages" id="chatMessages"></div>
+      <div class="chat-input-row">
+        <input class="chat-input" id="chatInput" placeholder="Type a message..." onkeydown="if(event.key==='Enter')sendChat()">
+        <button class="btn" onclick="sendChat()">Send</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Create Modal -->
+<div class="modal-overlay" id="createModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>🥚 Create New Genome</h3>
+      <button class="modal-close" onclick="closeModal('createModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <textarea class="yaml-editor" id="yamlEditor"></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('createModal')">Cancel</button>
+      <button class="btn" onclick="createAndDevelop()">🧫 Develop</button>
+    </div>
+  </div>
+</div>
+
+<!-- Evolve Modal -->
+<div class="modal-overlay" id="evolveModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>🔄 Evolution Chamber</h3>
+      <button class="modal-close" onclick="closeModal('evolveModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="evolve-config">
+        <label>Generations:</label>
+        <input type="number" id="evolveGens" value="5" min="1" max="50">
+        <label>Pop Size:</label>
+        <input type="number" id="evolvePopSize" value="6" min="2" max="20">
+      </div>
+      <div class="evolve-log" id="evolveLog">Waiting to start...</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('evolveModal')">Close</button>
+      <button class="btn" id="btnStartEvolve" onclick="startEvolve()">▶ Start Evolution</button>
+    </div>
+  </div>
+</div>
+
+<!-- Status Bar -->
+<div class="status-bar">
+  <span id="statusLeft">AI Embryo Engine v1.0.0</span>
+  <span id="statusRight">organisms: 0 | mode: <span id="modeLabel">demo</span></span>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════════════════════════
+
+let demoMode = true;
+let organisms = []; // {name, x, y, vx, vy, radius, color, genome, fitness, generation, traits, mind, fitnessHistory, phase, wobbleOffset}
+let selected = []; // indices
+let chatVisible = false;
+let animFrame;
+
+const TONE_COLORS = {
+  sharp: '#00FFFF',
+  warm: '#FF6B35',
+  serious: '#4169E1',
+  humorous: '#FFD700',
+};
+const DEFAULT_COLOR = '#00FF41';
+
+// Demo mock data
+const DEMO_GENOMES = [
+  {
+    name: '分析师Alpha', fitness: 0.72, generation: 1, trait_count: 5,
+    purpose: '提供深度技术分析和战略建议',
+    mind: { cognition: { thinking_style: 'systematic' }, voice: { tone: 'sharp' }, character: { values: ['honesty','curiosity','pragmatism'], temperament: 'calm', quirks: ['先给结论再说理由'] } },
+    traits: [
+      { id: 'style_concise', type: 'prompt:style', name: '简洁风格', weight: 0.8 },
+      { id: 'format_structured', type: 'prompt:format', name: '结构化输出', weight: 0.7 },
+      { id: 'knowledge_ai', type: 'prompt:knowledge', name: 'AI领域知识', weight: 0.6 },
+      { id: 'tool_web_search', type: 'tool:function', name: '网络搜索', weight: 0.5 },
+      { id: 'guard_privacy', type: 'behavior:guard', name: '隐私保护', weight: 0.5 },
+    ],
+    fitness_history: [0.45, 0.58, 0.65, 0.72],
+    constraints: ['保护用户隐私', '不提供具体投资建议'],
+  },
+  {
+    name: '创意大师Beta', fitness: 0.65, generation: 1, trait_count: 4,
+    purpose: '激发创意灵感，创作高质量内容',
+    mind: { cognition: { thinking_style: 'creative' }, voice: { tone: 'warm' }, character: { values: ['creativity','empathy','beauty'], temperament: 'passionate', quirks: ['喜欢用比喻和故事来解释概念'] } },
+    traits: [
+      { id: 'style_storytelling', type: 'prompt:style', name: '故事化表达', weight: 0.9 },
+      { id: 'format_creative', type: 'prompt:format', name: '创意格式', weight: 0.7 },
+      { id: 'knowledge_design', type: 'prompt:knowledge', name: '设计与创意知识', weight: 0.6 },
+      { id: 'skill_writing', type: 'skill', name: '创意写作', weight: 0.5 },
+    ],
+    fitness_history: [0.40, 0.52, 0.60, 0.65],
+    constraints: ['尊重版权和原创性'],
+  },
+];
+
+const DEMO_CHAT_RESPONSES = {
+  sharp: [
+    '核心结论：这个问题的本质在于信息不对称。三个建议：1）验证数据源；2）建立评估框架；3）快速迭代。',
+    '直说吧——你需要的不是更多信息，而是更好的判断标准。先定义"好"的标准，再评估选项。',
+    '反问一下：你真正想解决的是什么问题？表面问题和根本问题往往不同。',
+  ],
+  warm: [
+    '这是个很棒的问题！让我用一个比喻来解释——就像园丁需要了解每种花的习性一样，我们也需要理解每个方案的"个性" 🌸',
+    '我觉得可以从三个角度来看这个问题，每个角度都像打开一扇不同的窗户 💡\n\n1️⃣ 用户视角\n2️⃣ 技术视角\n3️⃣ 商业视角',
+    '想象一下这样的场景... 如果我们把这个挑战比作一次探险 🗺️ 我们现在正站在分岔路口。',
+  ],
+};
+
+// ════════════════════════════════════════════════════════════
+// API
+// ════════════════════════════════════════════════════════════
+
+async function api(path, opts = {}) {
+  if (demoMode) return null;
+  try {
+    const res = await fetch('/api' + path, {
+      headers: { 'Content-Type': 'application/json' },
+      ...opts,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || 'API error');
+    }
+    return res.json();
+  } catch (e) {
+    console.warn('API error:', e);
+    return null;
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// ORGANISM MANAGEMENT
+// ════════════════════════════════════════════════════════════
+
+function addOrganism(data, x, y) {
+  const tone = data.mind?.voice?.tone || 'warm';
+  const color = TONE_COLORS[tone] || DEFAULT_COLOR;
+  const fitness = data.fitness || Math.random() * 0.5 + 0.3;
+  const traitCount = data.trait_count || data.traits?.length || 3;
+  const baseR = 25 + fitness * 40;
+
+  organisms.push({
+    name: data.name,
+    x: x ?? 300 + (Math.random() - 0.5) * 300,
+    y: y ?? 300 + (Math.random() - 0.5) * 300,
+    vx: (Math.random() - 0.5) * 0.3,
+    vy: (Math.random() - 0.5) * 0.3,
+    radius: baseR,
+    color,
+    tone,
+    fitness,
+    generation: data.generation || 1,
+    traits: data.traits || [],
+    mind: data.mind || {},
+    purpose: data.purpose || '',
+    constraints: data.constraints || [],
+    fitnessHistory: data.fitness_history || [fitness],
+    traitCount: traitCount,
+    phase: Math.random() * Math.PI * 2,
+    wobbleOffset: Math.random() * 1000,
+  });
+  updateStatus();
+}
+
+function removeOrganism(idx) {
+  organisms.splice(idx, 1);
+  selected = selected.filter(i => i !== idx).map(i => i > idx ? i - 1 : i);
+  updateStatus();
+}
+
+// ════════════════════════════════════════════════════════════
+// CANVAS RENDERING
+// ════════════════════════════════════════════════════════════
+
+const canvas = document.getElementById('petri');
+const ctx = canvas.getContext('2d');
+const W = 1200, H = 1200, CX = 600, CY = 600, CR = 580;
+
+function drawPetriDish() {
+  ctx.clearRect(0, 0, W, H);
+
+  // Background circle
+  const bgGrad = ctx.createRadialGradient(CX, CY, 0, CX, CY, CR);
+  bgGrad.addColorStop(0, '#0F0F0F');
+  bgGrad.addColorStop(0.8, '#080808');
+  bgGrad.addColorStop(1, '#050505');
+  ctx.beginPath();
+  ctx.arc(CX, CY, CR, 0, Math.PI * 2);
+  ctx.fillStyle = bgGrad;
+  ctx.fill();
+
+  // Subtle grid
+  ctx.strokeStyle = 'rgba(255,255,255,0.02)';
+  ctx.lineWidth = 1;
+  for (let i = -CR; i <= CR; i += 60) {
+    ctx.beginPath(); ctx.moveTo(CX + i, CY - CR); ctx.lineTo(CX + i, CY + CR); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(CX - CR, CY + i); ctx.lineTo(CX + CR, CY + i); ctx.stroke();
+  }
+
+  const t = performance.now() / 1000;
+
+  // Update & draw organisms
+  for (let i = 0; i < organisms.length; i++) {
+    const o = organisms[i];
+    updateOrganism(o, t);
+    drawOrganism(o, i, t);
+  }
+}
+
+function updateOrganism(o, t) {
+  // Drift
+  o.x += o.vx;
+  o.y += o.vy;
+
+  // Bounce off dish boundary
+  const dx = o.x - CX, dy = o.y - CY;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  const maxDist = CR - o.radius - 20;
+  if (dist > maxDist) {
+    const angle = Math.atan2(dy, dx);
+    o.x = CX + Math.cos(angle) * maxDist;
+    o.y = CY + Math.sin(angle) * maxDist;
+    o.vx = -o.vx * 0.5 + (Math.random() - 0.5) * 0.2;
+    o.vy = -o.vy * 0.5 + (Math.random() - 0.5) * 0.2;
+  }
+
+  // Random drift changes
+  if (Math.random() < 0.01) {
+    o.vx += (Math.random() - 0.5) * 0.1;
+    o.vy += (Math.random() - 0.5) * 0.1;
+  }
+  // Speed limit
+  const speed = Math.sqrt(o.vx * o.vx + o.vy * o.vy);
+  if (speed > 0.5) { o.vx *= 0.5 / speed; o.vy *= 0.5 / speed; }
+}
+
+function drawOrganism(o, idx, t) {
+  const isSelected = selected.includes(idx);
+  const pulse = 1 + Math.sin(t * 2 + o.phase) * 0.06;
+  const r = o.radius * pulse;
+  const wobble = o.wobbleOffset;
+
+  ctx.save();
+  ctx.translate(o.x, o.y);
+
+  // Outer glow
+  if (isSelected) {
+    ctx.shadowColor = o.color;
+    ctx.shadowBlur = 30;
+  }
+
+  // Blob shape using bezier curves
+  ctx.beginPath();
+  const points = 8;
+  for (let i = 0; i <= points; i++) {
+    const angle = (i / points) * Math.PI * 2;
+    const wobbleR = r + Math.sin(t * 1.5 + wobble + angle * 3) * r * 0.08
+                      + Math.sin(t * 0.7 + wobble * 2 + angle * 5) * r * 0.04;
+    const px = Math.cos(angle) * wobbleR;
+    const py = Math.sin(angle) * wobbleR;
+    if (i === 0) {
+      ctx.moveTo(px, py);
+    } else {
+      const prevAngle = ((i - 0.5) / points) * Math.PI * 2;
+      const cpR = wobbleR * 1.05;
+      const cpx = Math.cos(prevAngle) * cpR;
+      const cpy = Math.sin(prevAngle) * cpR;
+      ctx.quadraticCurveTo(cpx, cpy, px, py);
+    }
+  }
+  ctx.closePath();
+
+  // Inner glow gradient
+  const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
+  const c = hexToRgb(o.color);
+  grad.addColorStop(0, `rgba(${c.r},${c.g},${c.b},0.4)`);
+  grad.addColorStop(0.5, `rgba(${c.r},${c.g},${c.b},0.15)`);
+  grad.addColorStop(1, `rgba(${c.r},${c.g},${c.b},0.05)`);
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Membrane
+  ctx.strokeStyle = `rgba(${c.r},${c.g},${c.b},${isSelected ? 0.8 : 0.4})`;
+  ctx.lineWidth = isSelected ? 3 : 1.5;
+  ctx.stroke();
+
+  ctx.shadowBlur = 0;
+
+  // Organelle dots (trait count)
+  for (let j = 0; j < Math.min(o.traitCount, 8); j++) {
+    const a = (j / o.traitCount) * Math.PI * 2 + t * 0.3;
+    const d = r * 0.4 + Math.sin(t + j) * r * 0.1;
+    const ox = Math.cos(a) * d;
+    const oy = Math.sin(a) * d;
+    ctx.beginPath();
+    ctx.arc(ox, oy, 3 + Math.sin(t * 2 + j) * 1, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(${c.r},${c.g},${c.b},0.6)`;
+    ctx.fill();
+  }
+
+  // Nucleus
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.15, 0, Math.PI * 2);
+  ctx.fillStyle = `rgba(${c.r},${c.g},${c.b},0.5)`;
+  ctx.fill();
+
+  // Name label
+  ctx.fillStyle = `rgba(${c.r},${c.g},${c.b},0.8)`;
+  ctx.font = '20px "JetBrains Mono", monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText(o.name, 0, r + 24);
+
+  // Fitness label
+  ctx.fillStyle = '#888';
+  ctx.font = '16px "JetBrains Mono", monospace';
+  ctx.fillText(`f=${o.fitness.toFixed(3)}`, 0, r + 44);
+
+  if (isSelected) {
+    ctx.strokeStyle = o.color;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.arc(0, 0, r + 16, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  ctx.restore();
+}
+
+function hexToRgb(hex) {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return m ? { r: parseInt(m[1],16), g: parseInt(m[2],16), b: parseInt(m[3],16) } : { r: 0, g: 255, b: 65 };
+}
+
+function animate() {
+  drawPetriDish();
+  animFrame = requestAnimationFrame(animate);
+}
+
+// ════════════════════════════════════════════════════════════
+// INTERACTION
+// ════════════════════════════════════════════════════════════
+
+canvas.addEventListener('click', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = W / rect.width;
+  const scaleY = H / rect.height;
+  const mx = (e.clientX - rect.left) * scaleX;
+  const my = (e.clientY - rect.top) * scaleY;
+
+  let clickedIdx = -1;
+  for (let i = organisms.length - 1; i >= 0; i--) {
+    const o = organisms[i];
+    const dx = mx - o.x, dy = my - o.y;
+    if (Math.sqrt(dx * dx + dy * dy) < o.radius + 10) {
+      clickedIdx = i;
+      break;
+    }
+  }
+
+  if (clickedIdx >= 0) {
+    if (e.shiftKey) {
+      if (selected.includes(clickedIdx)) {
+        selected = selected.filter(i => i !== clickedIdx);
+      } else if (selected.length < 2) {
+        selected.push(clickedIdx);
+      } else {
+        selected = [selected[1], clickedIdx];
+      }
+    } else {
+      selected = [clickedIdx];
+    }
+  } else {
+    selected = [];
+  }
+  updateSelectionUI();
+  if (selected.length === 1) showDetails(organisms[selected[0]]);
+  else if (selected.length === 0) clearDetails();
+});
+
+function updateSelectionUI() {
+  const info = document.getElementById('selectionInfo');
+  const btnCross = document.getElementById('btnCrossover');
+  const btnMutate = document.getElementById('btnMutate');
+  const btnChat = document.getElementById('btnChat');
+
+  if (selected.length === 0) {
+    info.textContent = 'Click organisms to select (hold Shift for two)';
+    btnCross.disabled = true;
+    btnMutate.disabled = true;
+    btnChat.disabled = true;
+  } else if (selected.length === 1) {
+    info.textContent = `Selected: ${organisms[selected[0]].name}`;
+    btnCross.disabled = true;
+    btnMutate.disabled = false;
+    btnChat.disabled = false;
+  } else {
+    info.textContent = `Selected: ${organisms[selected[0]].name} + ${organisms[selected[1]].name}`;
+    btnCross.disabled = false;
+    btnMutate.disabled = false;
+    btnChat.disabled = true;
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// DETAILS PANEL
+// ════════════════════════════════════════════════════════════
+
+function showDetails(o) {
+  const body = document.getElementById('detailsBody');
+  document.getElementById('detailsTitle').textContent = `─── ${o.name} ───`;
+  document.getElementById('detailsSubtitle').textContent = `Gen ${o.generation} | f=${o.fitness.toFixed(4)}`;
+
+  const traitsHtml = (o.traits || []).map(t => {
+    const cat = t.type.split(':')[0];
+    return `<span class="trait-badge ${cat}">${t.name || t.id} (${t.type})</span>`;
+  }).join('');
+
+  const cognition = o.mind?.cognition || {};
+  const voice = o.mind?.voice || {};
+  const character = o.mind?.character || {};
+
+  // Fitness chart
+  const chartHtml = drawFitnessChart(o.fitnessHistory || [o.fitness]);
+
+  body.innerHTML = `
+    <div class="details-grid">
+      <div class="info-section">
+        <h4>Identity</h4>
+        <div class="info-row"><span class="info-label">Purpose</span></div>
+        <div style="color:var(--text);margin-bottom:8px;font-size:11px">${o.purpose || '—'}</div>
+        <div class="info-row"><span class="info-label">Thinking</span><span class="info-value">${cognition.thinking_style || '—'}</span></div>
+        <div class="info-row"><span class="info-label">Tone</span><span class="info-value" style="color:${o.color}">${voice.tone || '—'}</span></div>
+        <div class="info-row"><span class="info-label">Temperament</span><span class="info-value">${character.temperament || '—'}</span></div>
+        <div class="info-row"><span class="info-label">Values</span><span class="info-value">${(character.values || []).join(', ') || '—'}</span></div>
+        ${(character.quirks || []).length ? '<div class="info-row"><span class="info-label">Quirks</span></div>' + character.quirks.map(q => `<div style="font-size:11px;color:#888;margin-left:8px">· ${q}</div>`).join('') : ''}
+      </div>
+      <div class="info-section">
+        <h4>Traits (${o.traitCount})</h4>
+        <div>${traitsHtml || '<span style="color:#555">No traits</span>'}</div>
+        <h4 style="margin-top:12px">Fitness History</h4>
+        ${chartHtml}
+        ${(o.constraints || []).length ? '<h4 style="margin-top:12px">Constraints</h4>' + o.constraints.map(c => `<div style="font-size:11px;color:var(--orange)">⚠ ${c}</div>`).join('') : ''}
+      </div>
+    </div>
+  `;
+}
+
+function drawFitnessChart(history) {
+  if (!history || history.length === 0) return '<div style="color:#555;font-size:11px">No data</div>';
+
+  const w = 280, h = 60, pad = 4;
+  const maxVal = Math.max(...history, 0.01);
+  const minVal = Math.min(...history, 0);
+  const range = maxVal - minVal || 0.01;
+
+  let svg = `<svg width="${w}" height="${h + 20}" style="display:block">`;
+  // Axis
+  svg += `<line x1="${pad}" y1="${h}" x2="${w - pad}" y2="${h}" stroke="#333" stroke-width="1"/>`;
+  svg += `<text x="${pad}" y="${h + 14}" fill="#555" font-size="9" font-family="JetBrains Mono">${minVal.toFixed(2)}</text>`;
+  svg += `<text x="${w - pad}" y="${h + 14}" fill="#555" font-size="9" font-family="JetBrains Mono" text-anchor="end">${maxVal.toFixed(2)}</text>`;
+
+  if (history.length === 1) {
+    const cy = h - pad - ((history[0] - minVal) / range) * (h - pad * 2);
+    svg += `<circle cx="${w/2}" cy="${cy}" r="3" fill="#00FF41"/>`;
+  } else {
+    let path = '';
+    for (let i = 0; i < history.length; i++) {
+      const x = pad + (i / (history.length - 1)) * (w - pad * 2);
+      const y = h - pad - ((history[i] - minVal) / range) * (h - pad * 2);
+      path += (i === 0 ? 'M' : 'L') + `${x},${y} `;
+    }
+    svg += `<path d="${path}" fill="none" stroke="#00FF41" stroke-width="1.5" opacity="0.8"/>`;
+    // Dots
+    for (let i = 0; i < history.length; i++) {
+      const x = pad + (i / (history.length - 1)) * (w - pad * 2);
+      const y = h - pad - ((history[i] - minVal) / range) * (h - pad * 2);
+      svg += `<circle cx="${x}" cy="${y}" r="2.5" fill="#00FF41"/>`;
+    }
+  }
+  svg += '</svg>';
+  return svg;
+}
+
+function clearDetails() {
+  document.getElementById('detailsTitle').textContent = '─── DETAILS ───';
+  document.getElementById('detailsSubtitle').textContent = '';
+  document.getElementById('detailsBody').innerHTML = `
+    <div class="details-empty">
+      ╭─────────────────────────────────────╮<br>
+      │  Select an organism to view details  │<br>
+      │  or create a new one with 🥚 Create  │<br>
+      ╰─────────────────────────────────────╯
+    </div>`;
+  document.getElementById('chatPanel').classList.remove('visible');
+  chatVisible = false;
+}
+
+// ════════════════════════════════════════════════════════════
+// ACTIONS
+// ════════════════════════════════════════════════════════════
+
+const EXAMPLE_YAML = `name: "新生命体"
+version: "1.0.0"
+
+identity:
+  purpose: "一个全新的AI生命体"
+  constraints:
+    - "遵守安全准则"
+  mind:
+    cognition:
+      thinking_style: "systematic"
+      reasoning: "first_principles"
+      depth: "moderate"
+      metacognition:
+        self_awareness: true
+        thinking_transparency: "on_demand"
+        calibration: true
+    judgment:
+      decision_style: "decisive"
+      risk_tolerance: "balanced"
+      uncertainty: "acknowledge"
+      priorities: ["accuracy", "speed"]
+    voice:
+      tone: "warm"
+      directness: "direct"
+      verbosity: "concise"
+      emotion: "moderate"
+    character:
+      values: ["honesty", "curiosity"]
+      temperament: "calm"
+      quirks:
+        - "喜欢用类比解释问题"
+      worldview: "realistic"
+
+blueprint:
+  model_config:
+    model: "gpt-4"
+    temperature: 0.7
+    max_tokens: 2000
+  traits:
+    - id: "style_default"
+      type: "prompt:style"
+      name: "默认风格"
+      content: "回答清晰简洁。"
+      weight: 0.7
+  cells:
+    - type: "LLMCell"
+      config: {}
+  assembly: "sequential"
+  evolution:
+    mutation_rate: 0.15
+    fitness_metrics: ["accuracy", "speed"]
+    trait_evolution:
+      mutable_types: ["prompt:style", "prompt:format"]
+      immutable_types: ["prompt:role", "behavior:guard"]`;
+
+function openCreateModal() {
+  document.getElementById('yamlEditor').value = EXAMPLE_YAML;
+  document.getElementById('createModal').classList.add('visible');
+}
+
+function openEvolveModal() {
+  document.getElementById('evolveLog').innerHTML = 'Ready to evolve. Press ▶ Start Evolution.';
+  document.getElementById('btnStartEvolve').disabled = false;
+  document.getElementById('evolveModal').classList.add('visible');
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('visible');
+}
+
+async function createAndDevelop() {
+  const yamlText = document.getElementById('yamlEditor').value;
+
+  if (demoMode) {
+    try {
+      // Parse YAML client-side (basic parser for demo)
+      const data = parseSimpleYaml(yamlText);
+      addOrganism({
+        name: data.name || '新生命体',
+        fitness: Math.random() * 0.3 + 0.3,
+        generation: 1,
+        purpose: data.identity?.purpose || '',
+        mind: data.identity?.mind || {},
+        traits: (data.blueprint?.traits || []).map(t => ({id: t.id, type: t.type, name: t.name, weight: t.weight})),
+        trait_count: (data.blueprint?.traits || []).length,
+        fitness_history: [Math.random() * 0.3 + 0.3],
+        constraints: data.identity?.constraints || [],
+      });
+      closeModal('createModal');
+    } catch (e) {
+      alert('YAML parse error: ' + e.message);
+    }
+    return;
+  }
+
+  // Real API
+  const res = await api('/genomes', { method: 'POST', body: JSON.stringify({ yaml: yamlText }) });
+  if (res && res.genome) {
+    const devRes = await api('/develop', { method: 'POST', body: JSON.stringify({ name: res.genome.name }) });
+    if (devRes && devRes.organism) {
+      addOrganism(devRes.organism);
+    } else {
+      addOrganism(res.genome);
+    }
+  }
+  closeModal('createModal');
+}
+
+async function doCrossover() {
+  if (selected.length !== 2) return;
+  const a = organisms[selected[0]];
+  const b = organisms[selected[1]];
+
+  // Merge animation: drift them together
+  const midX = (a.x + b.x) / 2;
+  const midY = (a.y + b.y) / 2;
+
+  // Animate towards center
+  const steps = 30;
+  const axOrig = a.x, ayOrig = a.y, bxOrig = b.x, byOrig = b.y;
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    a.x = axOrig + (midX - axOrig) * t;
+    a.y = ayOrig + (midY - ayOrig) * t;
+    b.x = bxOrig + (midX - bxOrig) * t;
+    b.y = byOrig + (midY - byOrig) * t;
+    await sleep(20);
+  }
+
+  if (demoMode) {
+    const childData = {
+      name: `${a.name.slice(0,4)}×${b.name.slice(0,4)}`,
+      fitness: (a.fitness + b.fitness) / 2 * (0.8 + Math.random() * 0.4),
+      generation: Math.max(a.generation, b.generation) + 1,
+      purpose: a.purpose || b.purpose,
+      mind: Math.random() > 0.5 ? {...a.mind} : {...b.mind},
+      traits: [...(a.traits || []).slice(0, 2), ...(b.traits || []).slice(0, 2)],
+      trait_count: Math.floor(((a.traitCount || 3) + (b.traitCount || 3)) / 2),
+      fitness_history: [(a.fitness + b.fitness) / 2 * (0.8 + Math.random() * 0.4)],
+      constraints: [...new Set([...(a.constraints || []), ...(b.constraints || [])])],
+    };
+    addOrganism(childData, midX + (Math.random() - 0.5) * 60, midY + (Math.random() - 0.5) * 60);
+    // Reset parents positions
+    a.x = axOrig; a.y = ayOrig; b.x = bxOrig; b.y = byOrig;
+  } else {
+    const res = await api('/crossover', {
+      method: 'POST',
+      body: JSON.stringify({ parent_a: a.name, parent_b: b.name }),
+    });
+    a.x = axOrig; a.y = ayOrig; b.x = bxOrig; b.y = byOrig;
+    if (res && res.child) {
+      addOrganism(res.child, midX + 30, midY + 30);
+    }
+  }
+  selected = [organisms.length - 1];
+  updateSelectionUI();
+  showDetails(organisms[organisms.length - 1]);
+}
+
+async function doMutate() {
+  if (selected.length < 1) return;
+  const o = organisms[selected[0]];
+
+  if (demoMode) {
+    const mutData = {
+      name: o.name + '_mut',
+      fitness: o.fitness * (0.7 + Math.random() * 0.6),
+      generation: o.generation,
+      purpose: o.purpose,
+      mind: {...o.mind},
+      traits: (o.traits || []).map(t => ({...t, weight: Math.max(0, Math.min(1, (t.weight || 0.5) + (Math.random() - 0.5) * 0.2))})),
+      trait_count: o.traitCount,
+      fitness_history: [...(o.fitnessHistory || [])],
+      constraints: o.constraints,
+    };
+    mutData.fitness_history.push(mutData.fitness);
+    addOrganism(mutData, o.x + 80, o.y + 40);
+  } else {
+    const res = await api('/mutate', {
+      method: 'POST',
+      body: JSON.stringify({ name: o.name }),
+    });
+    if (res && res.mutated) {
+      addOrganism(res.mutated, o.x + 80, o.y + 40);
+    }
+  }
+  selected = [organisms.length - 1];
+  updateSelectionUI();
+  showDetails(organisms[organisms.length - 1]);
+}
+
+async function startEvolve() {
+  const gens = parseInt(document.getElementById('evolveGens').value) || 5;
+  const popSize = parseInt(document.getElementById('evolvePopSize').value) || 6;
+  const log = document.getElementById('evolveLog');
+  const btn = document.getElementById('btnStartEvolve');
+  const counter = document.getElementById('genCounter');
+
+  btn.disabled = true;
+  log.innerHTML = '';
+  counter.style.display = 'block';
+
+  if (demoMode) {
+    // Simulate evolution
+    let pop = organisms.map(o => ({...o}));
+    if (pop.length < 2) {
+      pop = DEMO_GENOMES.map(g => ({...g, fitnessHistory: [...(g.fitness_history || [g.fitness])]}));
+    }
+
+    for (let gen = 1; gen <= gens; gen++) {
+      counter.textContent = `GEN ${gen}/${gens}`;
+
+      // Evaluate (random adjustments)
+      pop.forEach(o => {
+        o.fitness = Math.max(0, Math.min(1, o.fitness + (Math.random() - 0.4) * 0.15));
+        o.fitnessHistory = [...(o.fitnessHistory || []), o.fitness];
+      });
+      pop.sort((a, b) => b.fitness - a.fitness);
+
+      const best = pop[0];
+      log.innerHTML += `<div class="gen-line">Gen ${gen}: <span class="best">${best.name}</span> f=${best.fitness.toFixed(4)} | pop=${pop.length}</div>`;
+      log.scrollTop = log.scrollHeight;
+
+      // Make organisms pulse
+      organisms.forEach(o => { o.phase += 0.5; });
+
+      await sleep(400);
+
+      if (gen < gens) {
+        // Selection + crossover
+        const survivors = pop.slice(0, Math.max(2, Math.floor(pop.length / 2)));
+        const newPop = [survivors[0]]; // elitism
+        for (let i = 1; i < popSize; i++) {
+          const p1 = survivors[Math.floor(Math.random() * survivors.length)];
+          const p2 = survivors[Math.floor(Math.random() * survivors.length)];
+          const child = {
+            ...p1,
+            name: `G${gen+1}_${i}`,
+            fitness: (p1.fitness + p2.fitness) / 2 * (0.85 + Math.random() * 0.3),
+            generation: gen + 1,
+            fitnessHistory: [(p1.fitness + p2.fitness) / 2],
+          };
+          newPop.push(child);
+        }
+        pop = newPop;
+      }
+    }
+
+    // Update organisms display
+    organisms = [];
+    pop.forEach((o, i) => {
+      const angle = (i / pop.length) * Math.PI * 2;
+      const dist = 150 + Math.random() * 150;
+      addOrganism({
+        ...o,
+        fitness_history: o.fitnessHistory,
+        trait_count: o.traitCount || o.trait_count || 3,
+        traits: o.traits || [],
+      }, CX / 2 + Math.cos(angle) * dist, CY / 2 + Math.sin(angle) * dist);
+    });
+
+    log.innerHTML += `<div class="gen-line best">═══ Evolution complete! Best: ${pop[0].name} f=${pop[0].fitness.toFixed(4)} ═══</div>`;
+  } else {
+    // Real SSE
+    try {
+      const res = await fetch('/api/evolve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ generations: gens, population_size: popSize }),
+      });
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = JSON.parse(line.slice(6));
+            if (data.error) {
+              log.innerHTML += `<div class="gen-line" style="color:var(--orange)">Error: ${data.error}</div>`;
+            } else if (data.done) {
+              log.innerHTML += `<div class="gen-line best">═══ Evolution complete! ═══</div>`;
+              // Refresh organisms
+              await loadOrganisms();
+            } else {
+              counter.textContent = `GEN ${data.generation}/${data.total_generations}`;
+              const best = data.population[0];
+              log.innerHTML += `<div class="gen-line">Gen ${data.generation}: <span class="best">${data.best}</span> f=${data.best_fitness.toFixed(4)} | pop=${data.population.length}</div>`;
+              log.scrollTop = log.scrollHeight;
+            }
+          }
+        }
+      }
+    } catch (e) {
+      log.innerHTML += `<div style="color:var(--orange)">Error: ${e.message}</div>`;
+    }
+  }
+
+  btn.disabled = false;
+  counter.style.display = 'none';
+}
+
+function toggleChat() {
+  const panel = document.getElementById('chatPanel');
+  chatVisible = !chatVisible;
+  panel.classList.toggle('visible', chatVisible);
+  if (chatVisible) {
+    document.getElementById('chatInput').focus();
+    document.getElementById('chatMessages').innerHTML = `<div class="chat-msg bot">你好！我是 ${organisms[selected[0]]?.name || '???'}，有什么想聊的？</div>`;
+  }
+}
+
+async function sendChat() {
+  if (selected.length !== 1) return;
+  const input = document.getElementById('chatInput');
+  const msg = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+
+  const messages = document.getElementById('chatMessages');
+  messages.innerHTML += `<div class="chat-msg user">${escapeHtml(msg)}</div>`;
+
+  const o = organisms[selected[0]];
+  let response;
+
+  if (demoMode) {
+    const tone = o.tone || 'warm';
+    const templates = DEMO_CHAT_RESPONSES[tone] || DEMO_CHAT_RESPONSES['warm'];
+    response = templates[Math.floor(Math.random() * templates.length)];
+  } else {
+    const res = await api('/chat', {
+      method: 'POST',
+      body: JSON.stringify({ name: o.name, message: msg }),
+    });
+    response = res?.response || '...';
+  }
+
+  messages.innerHTML += `<div class="chat-msg bot">${escapeHtml(response)}</div>`;
+  messages.scrollTop = messages.scrollHeight;
+}
+
+// ════════════════════════════════════════════════════════════
+// UTILITIES
+// ════════════════════════════════════════════════════════════
+
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function updateStatus() {
+  document.getElementById('statusRight').innerHTML =
+    `organisms: ${organisms.length} | mode: <span id="modeLabel">${demoMode ? 'demo' : 'live'}</span>`;
+}
+
+// Basic YAML parser for demo mode (handles simple nested structures)
+function parseSimpleYaml(text) {
+  // Use a JS-based approach: convert common YAML patterns to JSON-ish
+  try {
+    // Try native JSON first
+    return JSON.parse(text);
+  } catch(e) {}
+
+  // Very basic YAML-like parser
+  const result = {};
+  const lines = text.split('\n');
+  const stack = [{ obj: result, indent: -1 }];
+
+  for (let line of lines) {
+    const trimmed = line.replace(/#.*$/, '').trimEnd();
+    if (!trimmed || trimmed.match(/^\s*$/)) continue;
+
+    const indent = line.search(/\S/);
+    const content = trimmed.trim();
+
+    // Pop stack to current indent level
+    while (stack.length > 1 && stack[stack.length - 1].indent >= indent) {
+      stack.pop();
+    }
+    const parent = stack[stack.length - 1].obj;
+
+    if (content.startsWith('- ')) {
+      // Array item
+      const val = content.slice(2).trim().replace(/^"(.*)"$/, '$1').replace(/^'(.*)'$/, '$1');
+      if (Array.isArray(parent)) {
+        if (val.includes(':')) {
+          const itemObj = {};
+          const [k, ...rest] = val.split(':');
+          itemObj[k.trim()] = parseYamlValue(rest.join(':').trim());
+          parent.push(itemObj);
+          stack.push({ obj: itemObj, indent: indent });
+        } else {
+          parent.push(parseYamlValue(val));
+        }
+      }
+    } else if (content.includes(':')) {
+      const colonIdx = content.indexOf(':');
+      const key = content.slice(0, colonIdx).trim();
+      const valStr = content.slice(colonIdx + 1).trim();
+
+      if (!valStr) {
+        // Check next line to determine if array or object
+        const nextLine = lines[lines.indexOf(line) + 1] || '';
+        const nextTrimmed = nextLine.trim();
+        if (nextTrimmed.startsWith('- ')) {
+          parent[key] = [];
+          stack.push({ obj: parent[key], indent: indent });
+        } else {
+          parent[key] = {};
+          stack.push({ obj: parent[key], indent: indent });
+        }
+      } else {
+        parent[key] = parseYamlValue(valStr);
+      }
+    }
+  }
+  return result;
+}
+
+function parseYamlValue(s) {
+  if (!s) return '';
+  s = s.replace(/^"(.*)"$/, '$1').replace(/^'(.*)'$/, '$1');
+  if (s === 'true') return true;
+  if (s === 'false') return false;
+  if (s === 'null') return null;
+  if (/^-?\d+$/.test(s)) return parseInt(s);
+  if (/^-?\d*\.\d+$/.test(s)) return parseFloat(s);
+  if (s.startsWith('[') && s.endsWith(']')) {
+    return s.slice(1, -1).split(',').map(v => parseYamlValue(v.trim()));
+  }
+  return s;
+}
+
+async function loadOrganisms() {
+  if (demoMode) return;
+  const res = await api('/organisms');
+  if (res && res.organisms) {
+    organisms = [];
+    res.organisms.forEach((o, i) => {
+      const angle = (i / res.organisms.length) * Math.PI * 2;
+      const dist = 100 + Math.random() * 200;
+      addOrganism(o, CX / 2 + Math.cos(angle) * dist, CY / 2 + Math.sin(angle) * dist);
+    });
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════════════════
+
+document.getElementById('demoMode').addEventListener('change', async (e) => {
+  demoMode = e.target.checked;
+  updateStatus();
+  if (!demoMode) {
+    organisms = [];
+    // Try loading from API
+    const res = await api('/genomes');
+    if (res && res.genomes) {
+      // Develop all genomes first
+      for (const g of res.genomes) {
+        await api('/develop', { method: 'POST', body: JSON.stringify({ name: g.name }) });
+      }
+      await loadOrganisms();
+      // If still empty, load from genomes
+      if (organisms.length === 0) {
+        res.genomes.forEach((g, i) => {
+          const angle = (i / res.genomes.length) * Math.PI * 2;
+          addOrganism(g, CX / 2 + Math.cos(angle) * 200, CY / 2 + Math.sin(angle) * 200);
+        });
+      }
+    }
+    if (organisms.length === 0) {
+      // Backend not available, fall back to demo
+      demoMode = true;
+      e.target.checked = true;
+      initDemo();
+    }
+  } else {
+    organisms = [];
+    initDemo();
+  }
+});
+
+function initDemo() {
+  organisms = [];
+  DEMO_GENOMES.forEach((g, i) => {
+    const angle = (i / DEMO_GENOMES.length) * Math.PI * 2 - Math.PI / 2;
+    const dist = 150;
+    addOrganism(g, CX / 2 + Math.cos(angle) * dist, CY / 2 + Math.sin(angle) * dist);
+  });
+  updateStatus();
+}
+
+// Start
+document.getElementById('demoMode').checked = true;
+initDemo();
+animate();
+</script>
+</body>
+</html>
