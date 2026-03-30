@@ -23,6 +23,12 @@ from ai_embryo import (
     Genome, Cell, CellRegistry, Organism, Embryo,
     EvolutionEngine, FitnessEvaluator, Task,
 )
+from ai_embryo.config_manager import ConfigManager
+
+# ── Configuration ──────────────────────────────────────────
+
+config = ConfigManager()
+config.load()
 
 # ── Register a mock LLM Cell ──────────────────────────────
 
@@ -77,6 +83,94 @@ class MockLLMCell(Cell):
         return {"response": response, "success": True}
 
 
+# ── Real LLM Cell ──────────────────────────────────────────
+
+class RealLLMCell(Cell):
+    """Real LLM Cell that calls OpenAI-compatible API."""
+
+    def __init__(self, config_dict: dict[str, Any] | None = None):
+        super().__init__(config_dict)
+        self._client = None
+
+    def _get_client(self):
+        if self._client is None:
+            try:
+                from openai import OpenAI
+            except ImportError:
+                raise RuntimeError("openai package required: pip install openai")
+
+            cfg = ConfigManager()
+            api_key = self.config.get("api_key") or cfg.get("llm.api_key", "")
+            base_url = self.config.get("base_url") or cfg.get("llm.base_url", "") or None
+
+            kwargs = {}
+            if api_key:
+                kwargs["api_key"] = api_key
+            if base_url:
+                kwargs["base_url"] = base_url
+            self._client = OpenAI(**kwargs)
+        return self._client
+
+    def process(self, input: dict[str, Any]) -> dict[str, Any]:
+        cfg = ConfigManager()
+        model = self.config.get("model") or cfg.get("llm.model", "gpt-4")
+        temperature = self.config.get("temperature") or cfg.get("llm.temperature", 0.7)
+        max_tokens = self.config.get("max_tokens") or cfg.get("llm.max_tokens", 2000)
+
+        # Build messages
+        messages = input.get("messages", [])
+        if not messages:
+            system_prompt = self.config.get("system_prompt", "")
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+
+            # Include conversation history if provided
+            history = input.get("history", [])
+            if history:
+                messages.extend(history)
+
+            user_input = input.get("input", input.get("message", ""))
+            if user_input:
+                messages.append({"role": "user", "content": user_input})
+
+        if not messages:
+            return {"response": "", "error": "没有输入内容"}
+
+        try:
+            client = self._get_client()
+            response = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            choice = response.choices[0]
+            result = {
+                "response": choice.message.content or "",
+                "finish_reason": choice.finish_reason,
+                "success": True,
+            }
+            if response.usage:
+                result["usage"] = {
+                    "prompt_tokens": response.usage.prompt_tokens,
+                    "completion_tokens": response.usage.completion_tokens,
+                    "total_tokens": response.usage.total_tokens,
+                }
+            return result
+        except Exception as e:
+            return {"response": f"LLM 调用失败: {e}", "success": False, "error": str(e)}
+
+
+def register_llm_cell():
+    """Register RealLLMCell or MockLLMCell based on config."""
+    if config.has_api_key():
+        CellRegistry._registry["LLMCell"] = RealLLMCell
+        print("  🔗 Using RealLLMCell (API key configured)")
+    else:
+        CellRegistry._registry["LLMCell"] = MockLLMCell
+        print("  🧪 Using MockLLMCell (no API key)")
+
+
 # ── App Setup ──────────────────────────────────────────────
 
 app = FastAPI(title="AI Embryo Engine — Petri Dish")
@@ -88,6 +182,7 @@ WEB_DIR = PROJECT_ROOT / "web"
 # Runtime storage
 genomes_store: dict[str, Genome] = {}
 organisms_store: dict[str, Organism] = {}
+chat_history: dict[str, list[dict]] = {}  # per-organism chat history
 
 
 def load_example_genomes():
@@ -146,6 +241,76 @@ def organism_to_info(o: Organism) -> dict:
     return info
 
 
+def _get_organism_system_prompt(org: Organism) -> str:
+    """Get compiled system prompt from organism's genome."""
+    try:
+        return org.genome.compile_system_prompt()
+    except Exception:
+        return ""
+
+
+def _run_with_real_llm(org: Organism, input_data: dict[str, Any], history: list[dict] | None = None) -> dict[str, Any]:
+    """Run organism with real LLM if configured, otherwise fallback to normal run."""
+    if not config.has_api_key():
+        return org.run(input_data)
+
+    # Use RealLLMCell directly with organism's system prompt
+    cell = RealLLMCell({
+        "system_prompt": _get_organism_system_prompt(org),
+    })
+    cell_input = dict(input_data)
+    if history:
+        cell_input["history"] = history
+    return cell.process(cell_input)
+
+
+# ── Config API Routes ──────────────────────────────────────
+
+@app.get("/api/config")
+def get_config():
+    return {"config": config.get_masked_config()}
+
+
+@app.post("/api/config")
+async def update_config(request: Request):
+    body = await request.json()
+    updated = []
+    for key in ["api_key", "model", "base_url", "provider"]:
+        if key in body:
+            config.set(f"llm.{key}", body[key])
+            updated.append(key)
+    config.save()
+    # Re-register LLM cell based on new config
+    register_llm_cell()
+    return {"status": "ok", "updated": updated, "config": config.get_masked_config()}
+
+
+@app.get("/api/config/models")
+def get_suggested_models():
+    return {
+        "models": {
+            "openai": ["gpt-4", "gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo", "o1", "o1-mini"],
+            "anthropic": ["claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3-haiku-20240307", "claude-3-5-sonnet-20241022"],
+            "custom": ["(enter your model name)"],
+        }
+    }
+
+
+@app.post("/api/config/test")
+async def test_llm_connection():
+    if not config.has_api_key():
+        return {"status": "error", "message": "No API key configured"}
+    try:
+        cell = RealLLMCell({})
+        result = cell.process({"input": "Say 'hello' in one word."})
+        if result.get("success"):
+            return {"status": "ok", "response": result.get("response", ""), "usage": result.get("usage")}
+        else:
+            return {"status": "error", "message": result.get("error", "Unknown error")}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
 # ── API Routes ─────────────────────────────────────────────
 
 @app.get("/api/genomes")
@@ -156,7 +321,6 @@ def list_genomes():
 @app.post("/api/genomes")
 async def create_genome(request: Request):
     body = await request.json()
-    # body can be raw YAML string or dict
     if isinstance(body, str):
         data = yaml.safe_load(body)
     elif "yaml" in body:
@@ -207,7 +371,7 @@ async def run_organism(request: Request):
     if not org:
         raise HTTPException(status_code=404, detail=f"Organism '{name}' not found")
 
-    result = org.run(input_data)
+    result = _run_with_real_llm(org, input_data)
     return {"status": "ok", "result": result}
 
 
@@ -228,7 +392,6 @@ async def crossover_genomes(request: Request):
         child = Genome.crossover(ga, gb)
         child.fitness = (ga.fitness + gb.fitness) / 2 * random.uniform(0.8, 1.2)
         genomes_store[child.name] = child
-        # Auto-develop
         org = Embryo.develop(child)
         org.generation = max(
             organisms_store.get(name_a, Organism(ga, [])).generation,
@@ -266,11 +429,10 @@ async def mutate_genome(request: Request):
 @app.post("/api/evolve")
 async def evolve_population(request: Request):
     body = await request.json()
-    generations = body.get("generations", 5)
-    population_size = body.get("population_size", 6)
+    generations = body.get("generations", config.get("evolution.default_generations", 5))
+    population_size = body.get("population_size", config.get("evolution.default_population_size", 6))
 
     async def event_stream():
-        # Build initial population from all organisms, or develop from genomes
         population = []
         for name, org in list(organisms_store.items()):
             population.append(org)
@@ -288,7 +450,6 @@ async def evolve_population(request: Request):
             yield f"data: {json.dumps({'error': 'Need at least 2 organisms to evolve'})}\n\n"
             return
 
-        # Create simple tasks for evaluation
         tasks = [
             Task(input={"input": "分析当前AI技术的发展趋势"}, expected="AI 技术 趋势 发展 大模型", name="分析任务", weight=1.0),
             Task(input={"input": "提出一个创新的产品想法"}, expected="创新 产品 用户 体验 设计", name="创意任务", weight=1.0),
@@ -298,7 +459,6 @@ async def evolve_population(request: Request):
         evaluator = FitnessEvaluator()
 
         for gen in range(1, generations + 1):
-            # Evaluate
             fitness_map = {}
             for org in population:
                 score = evaluator.evaluate(org, tasks)
@@ -327,12 +487,10 @@ async def evolve_population(request: Request):
             if gen == generations:
                 break
 
-            # Select top half
             n_survivors = max(2, len(population) // 2)
             survivors = population[:n_survivors]
             elites = population[:1]
 
-            # Crossover
             new_orgs = []
             for _ in range(population_size - 1):
                 if len(survivors) >= 2:
@@ -349,7 +507,6 @@ async def evolve_population(request: Request):
             population = list(elites) + new_orgs
             population = population[:population_size]
 
-        # Update stores with final population
         for org in population:
             genomes_store[org.name] = org.genome
             organisms_store[org.name] = org
@@ -379,7 +536,25 @@ async def chat_with_organism(request: Request):
     if not org:
         raise HTTPException(status_code=404, detail=f"Organism '{name}' not found")
 
-    result = org.run({"input": message, "message": message})
+    # Maintain per-organism chat history
+    if name not in chat_history:
+        chat_history[name] = []
+
+    history = chat_history[name]
+
+    if config.has_api_key():
+        # Use real LLM with conversation history
+        result = _run_with_real_llm(org, {"input": message, "message": message}, history=history)
+        # Append to history
+        history.append({"role": "user", "content": message})
+        resp_text = result.get("response", "...")
+        history.append({"role": "assistant", "content": resp_text})
+        # Keep history bounded (last 50 messages)
+        if len(history) > 50:
+            chat_history[name] = history[-50:]
+    else:
+        result = org.run({"input": message, "message": message})
+
     return {
         "status": "ok",
         "response": result.get("response", "..."),
@@ -397,12 +572,14 @@ def serve_index():
     return HTMLResponse("<h1>web/index.html not found</h1>", status_code=404)
 
 
-# Mount web dir for any other static assets
 if WEB_DIR.exists():
     app.mount("/web", StaticFiles(directory=str(WEB_DIR)), name="web")
 
 
 if __name__ == "__main__":
     print("🧬 AI Embryo Engine — Petri Dish")
-    print("   http://localhost:8000/")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = config.get("server.port", 8010)
+    host = config.get("server.host", "0.0.0.0")
+    print(f"   http://localhost:{port}/")
+    register_llm_cell()
+    uvicorn.run(app, host=host, port=port)

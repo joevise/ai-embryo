@@ -1,0 +1,12 @@
+version: '3.8'
+services:
+  ai-embryo:
+    build: .
+    ports:
+      - "8010:8010"
+    volumes:
+      - ./config.yaml:/app/config.yaml
+      - ./data:/app/data
+    environment:
+      - AI_EMBRYO_API_KEY=${AI_EMBRYO_API_KEY:-}
+    restart: unless-stopped
