@@ -1479,9 +1479,9 @@ async function init(){
     }
   }
   const gData = await apiFetch('/genomes');
-  if(gData && Array.isArray(gData)){genomes=gData;}else{genomes=[...MOCK_GENOMES];}
+  if(gData && gData.genomes){genomes=gData.genomes;}else if(gData && Array.isArray(gData)){genomes=gData;}else{genomes=[...MOCK_GENOMES];}
   const oData = await apiFetch('/organisms');
-  if(oData && Array.isArray(oData)){organisms=oData;}else{organisms=[...MOCK_ORGANISMS];}
+  if(oData && oData.organisms){organisms=oData.organisms;}else if(oData && Array.isArray(oData)){organisms=oData;}else{organisms=[...MOCK_ORGANISMS];}
 
   updateModeBadge();
   renderGenomeList();
@@ -2121,7 +2121,7 @@ async function startEvolve(){
         }
       }
       toast('Evolution complete!','success');
-      const oData=await apiFetch('/organisms');if(oData)organisms=oData;
+      const oData=await apiFetch('/organisms');if(oData && oData.organisms)organisms=oData.organisms;else if(oData && Array.isArray(oData))organisms=oData;
       initCanvas();updateSysInfo();
     }else{
       for(let g=1;g<=gens;g++){
