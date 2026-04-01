@@ -228,6 +228,22 @@ def load_example_genomes():
 load_example_genomes()
 
 
+def auto_develop_genomes():
+    """Auto-develop all loaded genomes into organisms on startup."""
+    register_llm_cell()
+    for name, g in list(genomes_store.items()):
+        if name not in organisms_store:
+            try:
+                org = Embryo.develop(g)
+                organisms_store[name] = org
+                print(f"  🧬 Auto-developed: {name}")
+            except Exception as e:
+                print(f"  ⚠️ Failed to develop {name}: {e}")
+
+
+auto_develop_genomes()
+
+
 def genome_to_info(g: Genome) -> dict:
     """Convert genome to API-friendly dict."""
     mind = g.identity.get("mind", {})
