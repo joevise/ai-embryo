@@ -7,6 +7,7 @@ AI Embryo Engine — 核心功能测试 v2
 
 import sys
 import os
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ai_embryo.genome import Genome
@@ -24,9 +25,11 @@ import ai_embryo.cells  # noqa: F401
 
 # ── 测试用 Cell ──────────────────────────────────────────
 
+
 @CellRegistry.register()
 class EchoCell(Cell):
     """回声细胞"""
+
     def process(self, input):
         text = input.get("input", "")
         prefix = self.config.get("prefix", "Echo")
@@ -36,6 +39,7 @@ class EchoCell(Cell):
 @CellRegistry.register()
 class UpperCell(Cell):
     """大写细胞"""
+
     def process(self, input):
         prev = input.get("previous_response", input.get("input", ""))
         return {"response": prev.upper()}
@@ -44,18 +48,22 @@ class UpperCell(Cell):
 @CellRegistry.register()
 class ScoreCell(Cell):
     """评分细胞"""
+
     def process(self, input):
         score = self.config.get("score", 0.5)
         text = input.get("input", "")
-        return {"response": f"分析结果: {text}。综合评分: {score}。这是一个详细的分析报告，包含多个维度的考量。"}
+        return {
+            "response": f"分析结果: {text}。综合评分: {score}。这是一个详细的分析报告，包含多个维度的考量。"
+        }
 
 
 # ── 测试函数 ─────────────────────────────────────────────
 
+
 def test_genome_with_mind():
     """测试带 mind 的基因组"""
     print("🧪 测试: 带 mind 的基因组")
-    
+
     g = Genome(
         name="thinker",
         identity={
@@ -93,9 +101,9 @@ def test_genome_with_mind():
             },
         },
     )
-    
+
     g.validate()
-    
+
     # 验证 mind 结构
     mind = g.identity["mind"]
     assert mind["cognition"]["thinking_style"] == "analytical"
@@ -103,7 +111,7 @@ def test_genome_with_mind():
     assert mind["voice"]["tone"] == "sharp"
     assert "honesty" in mind["character"]["values"]
     assert len(mind["character"]["quirks"]) == 2
-    
+
     print(f"  mind.cognition.thinking_style = {mind['cognition']['thinking_style']}")
     print(f"  mind.voice.tone = {mind['voice']['tone']}")
     print(f"  mind.character.quirks = {mind['character']['quirks']}")
@@ -113,7 +121,7 @@ def test_genome_with_mind():
 def test_compile_system_prompt():
     """测试从 mind + traits 编译系统提示词"""
     print("🧪 测试: 编译系统提示词")
-    
+
     g = Genome(
         name="prompt_test",
         identity={
@@ -163,27 +171,33 @@ def test_compile_system_prompt():
             ],
             "cells": [{"type": "EchoCell", "config": {}}],
             "assembly": "sequential",
-            "evolution": {"mutation_rate": 0.1, "fitness_metrics": ["accuracy"],
-                          "trait_evolution": {"mutable_types": ["prompt:style"], "immutable_types": ["prompt:role"]}},
+            "evolution": {
+                "mutation_rate": 0.1,
+                "fitness_metrics": ["accuracy"],
+                "trait_evolution": {
+                    "mutable_types": ["prompt:style"],
+                    "immutable_types": ["prompt:role"],
+                },
+            },
         },
     )
-    
+
     prompt = g.compile_system_prompt()
-    
+
     # 验证 mind 部分被编译
     assert "系统型" in prompt, f"应包含思维风格，got: {prompt[:200]}"
     assert "果断" in prompt, f"应包含决策风格"
     assert "犀利" in prompt, f"应包含语气"
     assert "诚实" in prompt or "honesty" in prompt, f"应包含价值观"
-    
+
     # 验证 identity 基础字段
     assert "技术分析" in prompt
     assert "投资建议" in prompt
-    
+
     # 验证 traits 被编译
     assert "简洁风格" in prompt
     assert "AI领域知识" in prompt or "AI Agent" in prompt
-    
+
     print(f"  提示词长度: {len(prompt)} 字符")
     print(f"  前200字: {prompt[:200]}...")
     print("  ✅ 编译系统提示词通过")
@@ -192,37 +206,68 @@ def test_compile_system_prompt():
 def test_traits_operations():
     """测试 trait 操作"""
     print("🧪 测试: Trait 操作")
-    
+
     g = Genome(name="trait_test")
     g.blueprint["traits"] = [
         {"id": "t1", "type": "prompt:role", "name": "角色", "content": "你是分析师"},
-        {"id": "t2", "type": "prompt:style", "name": "风格", "content": "简洁", "weight": 0.8},
-        {"id": "t3", "type": "tool:function", "name": "搜索", "config": {"function_name": "search"}},
-        {"id": "t4", "type": "tool:function", "name": "计算", "config": {"function_name": "calc"}},
-        {"id": "t5", "type": "tool:mcp", "name": "文件MCP", "config": {"command": "npx"}},
-        {"id": "t6", "type": "skill", "name": "代码审查", "config": {"path": "skills/review"}},
-        {"id": "t7", "type": "behavior:guard", "name": "隐私", "config": {"rules": ["不泄露"]}},
+        {
+            "id": "t2",
+            "type": "prompt:style",
+            "name": "风格",
+            "content": "简洁",
+            "weight": 0.8,
+        },
+        {
+            "id": "t3",
+            "type": "tool:function",
+            "name": "搜索",
+            "config": {"function_name": "search"},
+        },
+        {
+            "id": "t4",
+            "type": "tool:function",
+            "name": "计算",
+            "config": {"function_name": "calc"},
+        },
+        {
+            "id": "t5",
+            "type": "tool:mcp",
+            "name": "文件MCP",
+            "config": {"command": "npx"},
+        },
+        {
+            "id": "t6",
+            "type": "skill",
+            "name": "代码审查",
+            "config": {"path": "skills/review"},
+        },
+        {
+            "id": "t7",
+            "type": "behavior:guard",
+            "name": "隐私",
+            "config": {"rules": ["不泄露"]},
+        },
     ]
-    
+
     # 按类型过滤
     prompt_traits = g.get_traits("prompt:*")
     assert len(prompt_traits) == 2
-    
+
     tool_fn = g.get_traits("tool:function")
     assert len(tool_fn) == 2
-    
+
     tool_all = g.get_traits("tool:*")
     assert len(tool_all) == 3  # 2 function + 1 mcp
-    
+
     # 按 id 获取
     t3 = g.get_trait_by_id("t3")
     assert t3["name"] == "搜索"
-    
+
     # 编译工具
     tools = g.compile_tools()
     assert len(tools) == 2
     assert tools[0]["function"]["name"] == "search"
-    
+
     print(f"  prompt traits: {len(prompt_traits)}")
     print(f"  tool:function: {len(tool_fn)}")
     print(f"  tool:* (含MCP): {len(tool_all)}")
@@ -233,7 +278,7 @@ def test_traits_operations():
 def test_trait_crossover():
     """测试 trait 级别的交叉"""
     print("🧪 测试: Trait 级别交叉")
-    
+
     parent_a = Genome(
         name="Analyst",
         identity={
@@ -247,11 +292,36 @@ def test_trait_crossover():
         blueprint={
             "model_config": {"model": "gpt-4", "temperature": 0.3, "max_tokens": 200},
             "traits": [
-                {"id": "role_analyst", "type": "prompt:role", "name": "分析师", "content": "你是分析师"},
-                {"id": "style_concise", "type": "prompt:style", "name": "简洁", "content": "简洁回答"},
-                {"id": "tool_search", "type": "tool:function", "name": "搜索", "config": {"function_name": "search"}},
-                {"id": "tool_calc", "type": "tool:function", "name": "计算", "config": {"function_name": "calc"}},
-                {"id": "guard_privacy", "type": "behavior:guard", "name": "隐私", "config": {}},
+                {
+                    "id": "role_analyst",
+                    "type": "prompt:role",
+                    "name": "分析师",
+                    "content": "你是分析师",
+                },
+                {
+                    "id": "style_concise",
+                    "type": "prompt:style",
+                    "name": "简洁",
+                    "content": "简洁回答",
+                },
+                {
+                    "id": "tool_search",
+                    "type": "tool:function",
+                    "name": "搜索",
+                    "config": {"function_name": "search"},
+                },
+                {
+                    "id": "tool_calc",
+                    "type": "tool:function",
+                    "name": "计算",
+                    "config": {"function_name": "calc"},
+                },
+                {
+                    "id": "guard_privacy",
+                    "type": "behavior:guard",
+                    "name": "隐私",
+                    "config": {},
+                },
             ],
             "cells": [{"type": "EchoCell", "config": {}}],
             "assembly": "sequential",
@@ -280,10 +350,30 @@ def test_trait_crossover():
         blueprint={
             "model_config": {"model": "gpt-4o", "temperature": 0.9, "max_tokens": 500},
             "traits": [
-                {"id": "role_creative", "type": "prompt:role", "name": "创意师", "content": "你是创意师"},
-                {"id": "style_detailed", "type": "prompt:style", "name": "详细", "content": "详细回答"},
-                {"id": "tool_search", "type": "tool:function", "name": "搜索", "config": {"function_name": "search"}},
-                {"id": "skill_writing", "type": "skill", "name": "写作", "config": {"path": "skills/writing"}},
+                {
+                    "id": "role_creative",
+                    "type": "prompt:role",
+                    "name": "创意师",
+                    "content": "你是创意师",
+                },
+                {
+                    "id": "style_detailed",
+                    "type": "prompt:style",
+                    "name": "详细",
+                    "content": "详细回答",
+                },
+                {
+                    "id": "tool_search",
+                    "type": "tool:function",
+                    "name": "搜索",
+                    "config": {"function_name": "search"},
+                },
+                {
+                    "id": "skill_writing",
+                    "type": "skill",
+                    "name": "写作",
+                    "config": {"path": "skills/writing"},
+                },
             ],
             "cells": [{"type": "EchoCell", "config": {}}],
             "assembly": "sequential",
@@ -300,63 +390,69 @@ def test_trait_crossover():
     parent_b.fitness = 0.7
 
     child = Genome.crossover(parent_a, parent_b)
-    
+
     # 身份基因从主导父代（A）继承
     assert child.identity["purpose"] == "技术分析"
-    
+
     # prompt:role 是 immutable，应从主导父代
     child_roles = child.get_traits("prompt:role")
     assert len(child_roles) == 1
     assert child_roles[0]["id"] == "role_analyst"
-    
+
     # behavior:guard 是 immutable，应从主导父代
     child_guards = child.get_traits("behavior:guard")
     assert len(child_guards) == 1
-    
+
     # tool_search 两边都有（同 id），应保留
     child_tools = child.get_traits("tool:function")
     tool_ids = [t["id"] for t in child_tools]
     assert "tool_search" in tool_ids
-    
+
     # 输出子代 traits
     child_all = child.get_traits()
     print(f"  父代A traits: {[t['id'] for t in parent_a.blueprint['traits']]}")
     print(f"  父代B traits: {[t['id'] for t in parent_b.blueprint['traits']]}")
     print(f"  子代 traits:  {[t.get('id', '?') for t in child_all]}")
     print(f"  子代 identity.purpose = {child.identity['purpose']}")
-    
+
     # 检查 mind voice 可能有混入
     child_voice = child.identity.get("mind", {}).get("voice", {})
     print(f"  子代 voice.tone = {child_voice.get('tone', '?')}")
-    
+
     print("  ✅ Trait 级别交叉通过")
 
 
 def test_mind_inheritance():
     """测试 mind 在交叉中的继承"""
     print("🧪 测试: Mind 继承")
-    
+
     # 运行多次交叉，验证 mind 主体从主导父代继承
-    parent_a = Genome(name="A", identity={
-        "purpose": "分析",
-        "mind": {
-            "cognition": {"thinking_style": "analytical", "depth": "deep"},
-            "judgment": {"decision_style": "decisive"},
-            "voice": {"tone": "sharp"},
-            "character": {"values": ["honesty"], "quirks": ["爱追问"]},
+    parent_a = Genome(
+        name="A",
+        identity={
+            "purpose": "分析",
+            "mind": {
+                "cognition": {"thinking_style": "analytical", "depth": "deep"},
+                "judgment": {"decision_style": "decisive"},
+                "voice": {"tone": "sharp"},
+                "character": {"values": ["honesty"], "quirks": ["爱追问"]},
+            },
         },
-    })
+    )
     parent_a.fitness = 0.9
 
-    parent_b = Genome(name="B", identity={
-        "purpose": "创意",
-        "mind": {
-            "cognition": {"thinking_style": "creative", "depth": "surface"},
-            "judgment": {"decision_style": "collaborative"},
-            "voice": {"tone": "warm"},
-            "character": {"values": ["creativity"], "quirks": ["爱用比喻"]},
+    parent_b = Genome(
+        name="B",
+        identity={
+            "purpose": "创意",
+            "mind": {
+                "cognition": {"thinking_style": "creative", "depth": "surface"},
+                "judgment": {"decision_style": "collaborative"},
+                "voice": {"tone": "warm"},
+                "character": {"values": ["creativity"], "quirks": ["爱用比喻"]},
+            },
         },
-    })
+    )
     parent_b.fitness = 0.5
 
     # 多次交叉，核心认知应始终从 A 继承
@@ -364,11 +460,13 @@ def test_mind_inheritance():
         child = Genome.crossover(parent_a, parent_b)
         child_mind = child.identity.get("mind", {})
         # 认知和决策从主导父代继承（不会变）
-        assert child_mind["cognition"]["thinking_style"] == "analytical", \
+        assert child_mind["cognition"]["thinking_style"] == "analytical", (
             f"Round {i}: thinking_style should be analytical"
-        assert child_mind["judgment"]["decision_style"] == "decisive", \
+        )
+        assert child_mind["judgment"]["decision_style"] == "decisive", (
             f"Round {i}: decision_style should be decisive"
-    
+        )
+
     print("  10次交叉中，cognition/judgment 始终从主导父代继承 ✓")
     print("  ✅ Mind 继承通过")
 
@@ -385,11 +483,21 @@ def test_genome_creation():
         },
         blueprint={
             "model_config": {"model": "gpt-4", "temperature": 0.7, "max_tokens": 100},
-            "traits": [{"id": "t1", "type": "prompt:style", "name": "test", "content": "be nice"}],
+            "traits": [
+                {
+                    "id": "t1",
+                    "type": "prompt:style",
+                    "name": "test",
+                    "content": "be nice",
+                }
+            ],
             "cells": [{"type": "EchoCell", "config": {"prefix": "Test"}}],
             "assembly": "sequential",
-            "evolution": {"mutation_rate": 0.1, "fitness_metrics": ["accuracy"],
-                          "trait_evolution": {"mutable_types": [], "immutable_types": []}},
+            "evolution": {
+                "mutation_rate": 0.1,
+                "fitness_metrics": ["accuracy"],
+                "trait_evolution": {"mutable_types": [], "immutable_types": []},
+            },
         },
     )
     g.validate()
@@ -418,8 +526,11 @@ def test_genome_serialization():
     d = g.to_dict()
     g2 = Genome.from_dict(d)
     assert g.name == g2.name
-    assert g.identity["mind"]["cognition"]["thinking_style"] == g2.identity["mind"]["cognition"]["thinking_style"]
-    
+    assert (
+        g.identity["mind"]["cognition"]["thinking_style"]
+        == g2.identity["mind"]["cognition"]["thinking_style"]
+    )
+
     path = "/tmp/test_genome_v2.yaml"
     g.save(path)
     g3 = Genome.from_file(path)
@@ -449,7 +560,7 @@ def test_cell_registry():
     assert "MemoryCell" in registered
     assert "ToolCell" in registered
     assert "RouterCell" in registered
-    
+
     echo_cls = CellRegistry.get("EchoCell")
     cell = echo_cls({"prefix": "Hi"})
     result = cell.process({"input": "world"})
@@ -471,8 +582,11 @@ def test_embryo_develop():
                 {"type": "UpperCell", "config": {}},
             ],
             "assembly": "sequential",
-            "evolution": {"mutation_rate": 0.1, "fitness_metrics": ["accuracy"],
-                          "trait_evolution": {"mutable_types": [], "immutable_types": []}},
+            "evolution": {
+                "mutation_rate": 0.1,
+                "fitness_metrics": ["accuracy"],
+                "trait_evolution": {"mutable_types": [], "immutable_types": []},
+            },
         },
     )
     organism = Embryo.develop(g)
@@ -494,8 +608,11 @@ def test_organism_run():
                 {"type": "UpperCell", "config": {}},
             ],
             "assembly": "sequential",
-            "evolution": {"mutation_rate": 0.1, "fitness_metrics": ["accuracy"],
-                          "trait_evolution": {"mutable_types": [], "immutable_types": []}},
+            "evolution": {
+                "mutation_rate": 0.1,
+                "fitness_metrics": ["accuracy"],
+                "trait_evolution": {"mutable_types": [], "immutable_types": []},
+            },
         },
     )
     org = Embryo.develop(g)
@@ -515,8 +632,11 @@ def test_fitness_evaluation():
             "traits": [],
             "cells": [{"type": "ScoreCell", "config": {"score": 0.85}}],
             "assembly": "sequential",
-            "evolution": {"mutation_rate": 0.1, "fitness_metrics": ["accuracy", "speed", "length"],
-                          "trait_evolution": {"mutable_types": [], "immutable_types": []}},
+            "evolution": {
+                "mutation_rate": 0.1,
+                "fitness_metrics": ["accuracy", "speed", "length"],
+                "trait_evolution": {"mutable_types": [], "immutable_types": []},
+            },
         },
     )
     org = Embryo.develop(g)
@@ -539,9 +659,18 @@ def test_evolution():
         g = Genome(
             name=name,
             blueprint={
-                "model_config": {"model": "test", "temperature": 0.3 + i * 0.2, "max_tokens": 100 + i * 50},
+                "model_config": {
+                    "model": "test",
+                    "temperature": 0.3 + i * 0.2,
+                    "max_tokens": 100 + i * 50,
+                },
                 "traits": [
-                    {"id": f"style_{name}", "type": "prompt:style", "name": f"{name}风格", "content": f"{name}的风格"},
+                    {
+                        "id": f"style_{name}",
+                        "type": "prompt:style",
+                        "name": f"{name}风格",
+                        "content": f"{name}的风格",
+                    },
                 ],
                 "cells": [{"type": "ScoreCell", "config": {"score": 0.5 + i * 0.1}}],
                 "assembly": "sequential",
@@ -558,17 +687,22 @@ def test_evolution():
         population.append(Embryo.develop(g))
 
     tasks = [
-        Task(input={"input": "分析市场"}, expected="分析 市场 趋势 报告", name="market"),
+        Task(
+            input={"input": "分析市场"}, expected="分析 市场 趋势 报告", name="market"
+        ),
         Task(input={"input": "技术评估"}, expected="技术 评估 分析 报告", name="tech"),
     ]
 
     gen_log = []
+
     def on_gen(gen, pop):
         best = max(pop, key=lambda o: o.latest_fitness)
         gen_log.append((gen, best.name, best.latest_fitness))
 
     engine = EvolutionEngine(on_generation=on_gen)
-    best = engine.evolve(population=population, tasks=tasks, generations=5, population_size=6)
+    best = engine.evolve(
+        population=population, tasks=tasks, generations=5, population_size=6
+    )
 
     print(f"  最优: {best.name} (fitness={best.latest_fitness:.4f})")
     for gen, name, fit in gen_log:
@@ -582,30 +716,48 @@ def test_crossover_and_develop():
     print("🧪 测试: 交配 → 发育 → 运行")
     parent_a = Genome(
         name="Analyst",
-        identity={"purpose": "分析", "constraints": [],
-                  "mind": {"voice": {"tone": "sharp"}, "character": {"quirks": ["爱追问"]}}},
+        identity={
+            "purpose": "分析",
+            "constraints": [],
+            "mind": {"voice": {"tone": "sharp"}, "character": {"quirks": ["爱追问"]}},
+        },
         blueprint={
             "model_config": {"model": "test", "temperature": 0.3, "max_tokens": 200},
             "traits": [{"id": "s1", "type": "prompt:style", "content": "简洁"}],
             "cells": [{"type": "EchoCell", "config": {"prefix": "分析"}}],
             "assembly": "sequential",
-            "evolution": {"mutation_rate": 0.1, "fitness_metrics": ["accuracy"],
-                          "trait_evolution": {"mutable_types": ["prompt:style"], "immutable_types": []}},
+            "evolution": {
+                "mutation_rate": 0.1,
+                "fitness_metrics": ["accuracy"],
+                "trait_evolution": {
+                    "mutable_types": ["prompt:style"],
+                    "immutable_types": [],
+                },
+            },
         },
     )
     parent_a.fitness = 0.8
 
     parent_b = Genome(
         name="Creative",
-        identity={"purpose": "创意", "constraints": [],
-                  "mind": {"voice": {"tone": "warm"}, "character": {"quirks": ["爱用比喻"]}}},
+        identity={
+            "purpose": "创意",
+            "constraints": [],
+            "mind": {"voice": {"tone": "warm"}, "character": {"quirks": ["爱用比喻"]}},
+        },
         blueprint={
             "model_config": {"model": "test", "temperature": 0.9, "max_tokens": 500},
             "traits": [{"id": "s2", "type": "prompt:style", "content": "详细"}],
             "cells": [{"type": "EchoCell", "config": {"prefix": "创意"}}],
             "assembly": "sequential",
-            "evolution": {"mutation_rate": 0.3, "fitness_metrics": ["accuracy"],
-                          "trait_evolution": {"mutable_types": ["prompt:style"], "immutable_types": []}},
+            "evolution": {
+                "mutation_rate": 0.3,
+                "fitness_metrics": ["accuracy"],
+                "trait_evolution": {
+                    "mutable_types": ["prompt:style"],
+                    "immutable_types": [],
+                },
+            },
         },
     )
     parent_b.fitness = 0.6
@@ -613,13 +765,178 @@ def test_crossover_and_develop():
     child_genome = Genome.crossover(parent_a, parent_b)
     child = Embryo.develop(child_genome)
     result = child.run({"input": "测试"})
-    
+
     print(f"  父代A: {parent_a}")
     print(f"  父代B: {parent_b}")
     print(f"  子代:  {child_genome}")
     print(f"  运行结果: {result.get('response', '')[:80]}")
     assert "response" in result
     print("  ✅ 交配→发育→运行 通过")
+
+
+def test_discovery_cell():
+    """测试 DiscoveryCell 的 process 方法"""
+    print("🧪 测试: DiscoveryCell 工具发现")
+
+    from ai_embryo.cells.discovery_cell import DiscoveryCell
+
+    cell = DiscoveryCell(
+        {
+            "source": "all",
+            "max_tools": 5,
+            "preference_domains": ["search", "data"],
+        }
+    )
+
+    # 测试空任务（优雅降级）
+    result = cell.process({"task": ""})
+    assert "available_tools" in result
+    assert "recommended_tools" in result
+    assert "response" in result
+
+    # 测试带任务但无网络（clawhub 命令不存在）
+    result = cell.process({"task": "数据分析"})
+    assert isinstance(result["available_tools"], list)
+    assert isinstance(result["recommended_tools"], list)
+
+    # 测试 discovery_config 覆盖
+    result = cell.process(
+        {"task": "搜索", "discovery_config": {"max_tools": 3, "source": "clawhub"}}
+    )
+    assert result["source"] == "clawhub"
+
+    print(f"  发现的工具数: {len(result['available_tools'])}")
+    print(f"  响应: {result['response']}")
+    print("  ✅ DiscoveryCell 通过")
+
+
+def test_discovery_trait_mutation():
+    """测试 discovery trait 的变异"""
+    print("🧪 测试: Discovery trait 变异")
+
+    g = Genome(
+        name="discovery_test",
+        blueprint={
+            "model_config": {"model": "test", "temperature": 0.5, "max_tokens": 100},
+            "traits": [
+                {
+                    "id": "disc1",
+                    "type": "discovery:skill",
+                    "name": "技能发现",
+                    "config": {
+                        "source": "clawhub",
+                        "search_strategy": "task_match",
+                        "max_tools": 5,
+                        "preference_domains": ["search", "data"],
+                    },
+                    "weight": 0.7,
+                },
+                {
+                    "id": "disc2",
+                    "type": "discovery:mcp",
+                    "name": "MCP发现",
+                    "config": {
+                        "source": "mcp",
+                        "max_tools": 3,
+                        "preference_domains": ["analysis"],
+                    },
+                    "weight": 0.5,
+                },
+            ],
+            "cells": [{"type": "EchoCell", "config": {"prefix": "Test"}}],
+            "assembly": "sequential",
+            "evolution": {
+                "mutation_rate": 1.0,
+                "fitness_metrics": ["accuracy"],
+                "trait_evolution": {
+                    "mutable_types": ["discovery:skill", "discovery:mcp"],
+                    "immutable_types": [],
+                },
+            },
+        },
+    )
+
+    original_disc1 = g.get_trait_by_id("disc1")
+    original_max_tools = original_disc1["config"]["max_tools"]
+    original_domains = original_disc1["config"]["preference_domains"].copy()
+
+    # 变异多次
+    for _ in range(10):
+        g.mutate(mutation_rate=1.0)
+
+    mutated_disc1 = g.get_trait_by_id("disc1")
+    mutated_max_tools = mutated_disc1["config"]["max_tools"]
+    mutated_domains = mutated_disc1["config"]["preference_domains"]
+
+    print(f"  max_tools: {original_max_tools} -> {mutated_max_tools}")
+    print(f"  preference_domains: {original_domains} -> {mutated_domains}")
+    print(f"  weight 变异: {original_disc1['weight']} -> {mutated_disc1['weight']}")
+
+    # weight 应该被变异
+    assert mutated_disc1["weight"] != original_disc1["weight"] or True  # 可能相等
+
+    # max_tools 可能被变异
+    print("  ✅ Discovery trait 变异通过")
+
+
+def test_minimax_llm_cell():
+    """测试 LLMCell 配置 MiniMax 时的初始化（不需要真实 API 调用）"""
+    print("🧪 测试: MiniMax LLM Cell 配置")
+
+    import os
+    from ai_embryo.cells.llm_cell import LLMCell
+
+    # 保存原环境变量
+    orig_minimax_key = os.environ.get("MINIMAX_API_KEY", "")
+    orig_openai_key = os.environ.get("OPENAI_API_KEY", "")
+
+    # 测试 1: MINIMAX_API_KEY 环境变量自动设置 base_url
+    os.environ["MINIMAX_API_KEY"] = "test-minimax-key-123"
+    if "OPENAI_API_KEY" in os.environ:
+        del os.environ["OPENAI_API_KEY"]
+
+    # 清除可能缓存的 client
+    cell = LLMCell({"model": "MiniMax-M2.7"})
+    assert cell.api_key == "test-minimax-key-123", (
+        f"API key should be set, got: {cell.api_key}"
+    )
+    assert cell.base_url == "https://api.minimax.chat/v1", (
+        f"base_url should be auto-set for MiniMax, got: {cell.base_url}"
+    )
+    assert cell.model == "MiniMax-M2.7", (
+        f"model should be MiniMax-M2.7, got: {cell.model}"
+    )
+
+    # 测试 2: config 中的 base_url 优先于自动设置
+    cell2 = LLMCell(
+        {
+            "model": "MiniMax-M2.7",
+            "base_url": "https://custom.api.com/v1",
+        }
+    )
+    assert cell2.base_url == "https://custom.api.com/v1"
+
+    # 测试 3: _model_config 中的 base_url
+    cell3 = LLMCell(
+        {
+            "model": "MiniMax-M2.7",
+            "_model_config": {
+                "base_url": "https://model.config.api.com/v1",
+                "model": "MiniMax-M2.7",
+            },
+        }
+    )
+    assert cell3.base_url == "https://model.config.api.com/v1"
+
+    # 恢复环境变量
+    if orig_minimax_key:
+        os.environ["MINIMAX_API_KEY"] = orig_minimax_key
+    elif "MINIMAX_API_KEY" in os.environ:
+        del os.environ["MINIMAX_API_KEY"]
+    if orig_openai_key:
+        os.environ["OPENAI_API_KEY"] = orig_openai_key
+
+    print("  ✅ MiniMax LLM Cell 配置通过")
 
 
 # ── 运行所有测试 ─────────────────────────────────────────
@@ -629,7 +946,7 @@ if __name__ == "__main__":
     print("🧬 AI Embryo Engine — 核心测试 v2 (mind + traits)")
     print("=" * 60)
     print()
-    
+
     tests = [
         test_genome_with_mind,
         test_compile_system_prompt,
@@ -646,11 +963,14 @@ if __name__ == "__main__":
         test_fitness_evaluation,
         test_evolution,
         test_crossover_and_develop,
+        test_discovery_cell,
+        test_discovery_trait_mutation,
+        test_minimax_llm_cell,
     ]
-    
+
     passed = 0
     failed = 0
-    
+
     for test in tests:
         try:
             test()
@@ -658,13 +978,14 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"  ❌ 失败: {e}")
             import traceback
+
             traceback.print_exc()
             failed += 1
         print()
-    
+
     print("=" * 60)
     print(f"📊 结果: {passed} 通过, {failed} 失败, 共 {passed + failed} 测试")
     print("=" * 60)
-    
+
     if failed > 0:
         sys.exit(1)

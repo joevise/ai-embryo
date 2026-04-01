@@ -20,8 +20,14 @@ from fastapi.staticfiles import StaticFiles
 
 # AI Embryo imports
 from ai_embryo import (
-    Genome, Cell, CellRegistry, Organism, Embryo,
-    EvolutionEngine, FitnessEvaluator, Task,
+    Genome,
+    Cell,
+    CellRegistry,
+    Organism,
+    Embryo,
+    EvolutionEngine,
+    FitnessEvaluator,
+    Task,
 )
 from ai_embryo.config_manager import ConfigManager
 
@@ -31,6 +37,7 @@ config = ConfigManager()
 config.load()
 
 # ── Register a mock LLM Cell ──────────────────────────────
+
 
 @CellRegistry.register("LLMCell")
 class MockLLMCell(Cell):
@@ -85,6 +92,7 @@ class MockLLMCell(Cell):
 
 # ── Real LLM Cell ──────────────────────────────────────────
 
+
 class RealLLMCell(Cell):
     """Real LLM Cell that calls OpenAI-compatible API."""
 
@@ -101,7 +109,9 @@ class RealLLMCell(Cell):
 
             cfg = ConfigManager()
             api_key = self.config.get("api_key") or cfg.get("llm.api_key", "")
-            base_url = self.config.get("base_url") or cfg.get("llm.base_url", "") or None
+            base_url = (
+                self.config.get("base_url") or cfg.get("llm.base_url", "") or None
+            )
 
             kwargs = {}
             if api_key:
@@ -161,9 +171,20 @@ class RealLLMCell(Cell):
             return {"response": f"LLM 调用失败: {e}", "success": False, "error": str(e)}
 
 
+def _has_any_api_key() -> bool:
+    """检查是否有任何 API key 配置（config、MINIMAX_API_KEY、AI_EMBRYO_API_KEY）"""
+    if config.has_api_key():
+        return True
+    if os.environ.get("MINIMAX_API_KEY", ""):
+        return True
+    if os.environ.get("AI_EMBRYO_API_KEY", ""):
+        return True
+    return False
+
+
 def register_llm_cell():
     """Register RealLLMCell or MockLLMCell based on config."""
-    if config.has_api_key():
+    if _has_any_api_key():
         CellRegistry._registry["LLMCell"] = RealLLMCell
         print("  🔗 Using RealLLMCell (API key configured)")
     else:
@@ -217,7 +238,15 @@ def genome_to_info(g: Genome) -> dict:
         "fitness": g.fitness,
         "purpose": g.identity.get("purpose", ""),
         "mind": mind,
-        "traits": [{"id": t.get("id", ""), "type": t.get("type", ""), "name": t.get("name", ""), "weight": t.get("weight", 0.5)} for t in traits],
+        "traits": [
+            {
+                "id": t.get("id", ""),
+                "type": t.get("type", ""),
+                "name": t.get("name", ""),
+                "weight": t.get("weight", 0.5),
+            }
+            for t in traits
+        ],
         "trait_count": len(traits),
         "model_config": g.blueprint.get("model_config", {}),
         "constraints": g.identity.get("constraints", []),
@@ -229,15 +258,17 @@ def genome_to_info(g: Genome) -> dict:
 def organism_to_info(o: Organism) -> dict:
     """Convert organism to API-friendly dict."""
     info = genome_to_info(o.genome)
-    info.update({
-        "generation": o.generation,
-        "fitness_history": o.fitness_history,
-        "birth_time": o.birth_time,
-        "age": round(o.age, 1),
-        "run_count": o._run_count,
-        "cell_count": len(o.cells),
-        "assembly": o.assembly,
-    })
+    info.update(
+        {
+            "generation": o.generation,
+            "fitness_history": o.fitness_history,
+            "birth_time": o.birth_time,
+            "age": round(o.age, 1),
+            "run_count": o._run_count,
+            "cell_count": len(o.cells),
+            "assembly": o.assembly,
+        }
+    )
     return info
 
 
@@ -249,15 +280,19 @@ def _get_organism_system_prompt(org: Organism) -> str:
         return ""
 
 
-def _run_with_real_llm(org: Organism, input_data: dict[str, Any], history: list[dict] | None = None) -> dict[str, Any]:
+def _run_with_real_llm(
+    org: Organism, input_data: dict[str, Any], history: list[dict] | None = None
+) -> dict[str, Any]:
     """Run organism with real LLM if configured, otherwise fallback to normal run."""
-    if not config.has_api_key():
+    if not _has_any_api_key():
         return org.run(input_data)
 
     # Use RealLLMCell directly with organism's system prompt
-    cell = RealLLMCell({
-        "system_prompt": _get_organism_system_prompt(org),
-    })
+    cell = RealLLMCell(
+        {
+            "system_prompt": _get_organism_system_prompt(org),
+        }
+    )
     cell_input = dict(input_data)
     if history:
         cell_input["history"] = history
@@ -265,6 +300,7 @@ def _run_with_real_llm(org: Organism, input_data: dict[str, Any], history: list[
 
 
 # ── Config API Routes ──────────────────────────────────────
+
 
 @app.get("/api/config")
 def get_config():
@@ -289,8 +325,20 @@ async def update_config(request: Request):
 def get_suggested_models():
     return {
         "models": {
-            "openai": ["gpt-4", "gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo", "o1", "o1-mini"],
-            "anthropic": ["claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3-haiku-20240307", "claude-3-5-sonnet-20241022"],
+            "openai": [
+                "gpt-4",
+                "gpt-4o",
+                "gpt-4o-mini",
+                "gpt-3.5-turbo",
+                "o1",
+                "o1-mini",
+            ],
+            "anthropic": [
+                "claude-3-opus-20240229",
+                "claude-3-sonnet-20240229",
+                "claude-3-haiku-20240307",
+                "claude-3-5-sonnet-20241022",
+            ],
             "custom": ["(enter your model name)"],
         }
     }
@@ -298,13 +346,17 @@ def get_suggested_models():
 
 @app.post("/api/config/test")
 async def test_llm_connection():
-    if not config.has_api_key():
+    if not _has_any_api_key():
         return {"status": "error", "message": "No API key configured"}
     try:
         cell = RealLLMCell({})
         result = cell.process({"input": "Say 'hello' in one word."})
         if result.get("success"):
-            return {"status": "ok", "response": result.get("response", ""), "usage": result.get("usage")}
+            return {
+                "status": "ok",
+                "response": result.get("response", ""),
+                "usage": result.get("usage"),
+            }
         else:
             return {"status": "error", "message": result.get("error", "Unknown error")}
     except Exception as e:
@@ -312,6 +364,7 @@ async def test_llm_connection():
 
 
 # ── API Routes ─────────────────────────────────────────────
+
 
 @app.get("/api/genomes")
 def list_genomes():
@@ -393,10 +446,13 @@ async def crossover_genomes(request: Request):
         child.fitness = (ga.fitness + gb.fitness) / 2 * random.uniform(0.8, 1.2)
         genomes_store[child.name] = child
         org = Embryo.develop(child)
-        org.generation = max(
-            organisms_store.get(name_a, Organism(ga, [])).generation,
-            organisms_store.get(name_b, Organism(gb, [])).generation,
-        ) + 1
+        org.generation = (
+            max(
+                organisms_store.get(name_a, Organism(ga, [])).generation,
+                organisms_store.get(name_b, Organism(gb, [])).generation,
+            )
+            + 1
+        )
         organisms_store[child.name] = org
         return {"status": "ok", "child": organism_to_info(org)}
     except Exception as e:
@@ -423,14 +479,22 @@ async def mutate_genome(request: Request):
         organisms_store[mutated.name] = org
         return {"status": "ok", "mutated": organism_to_info(org)}
     except Exception as e:
-        return {"status": "ok", "mutated": genome_to_info(mutated), "develop_error": str(e)}
+        return {
+            "status": "ok",
+            "mutated": genome_to_info(mutated),
+            "develop_error": str(e),
+        }
 
 
 @app.post("/api/evolve")
 async def evolve_population(request: Request):
     body = await request.json()
-    generations = body.get("generations", config.get("evolution.default_generations", 5))
-    population_size = body.get("population_size", config.get("evolution.default_population_size", 6))
+    generations = body.get(
+        "generations", config.get("evolution.default_generations", 5)
+    )
+    population_size = body.get(
+        "population_size", config.get("evolution.default_population_size", 6)
+    )
 
     async def event_stream():
         population = []
@@ -451,9 +515,24 @@ async def evolve_population(request: Request):
             return
 
         tasks = [
-            Task(input={"input": "分析当前AI技术的发展趋势"}, expected="AI 技术 趋势 发展 大模型", name="分析任务", weight=1.0),
-            Task(input={"input": "提出一个创新的产品想法"}, expected="创新 产品 用户 体验 设计", name="创意任务", weight=1.0),
-            Task(input={"input": "如何提高团队效率"}, expected="效率 团队 协作 流程 优化", name="效率任务", weight=1.0),
+            Task(
+                input={"input": "分析当前AI技术的发展趋势"},
+                expected="AI 技术 趋势 发展 大模型",
+                name="分析任务",
+                weight=1.0,
+            ),
+            Task(
+                input={"input": "提出一个创新的产品想法"},
+                expected="创新 产品 用户 体验 设计",
+                name="创意任务",
+                weight=1.0,
+            ),
+            Task(
+                input={"input": "如何提高团队效率"},
+                expected="效率 团队 协作 流程 优化",
+                name="效率任务",
+                weight=1.0,
+            ),
         ]
 
         evaluator = FitnessEvaluator()
@@ -542,9 +621,11 @@ async def chat_with_organism(request: Request):
 
     history = chat_history[name]
 
-    if config.has_api_key():
+    if _has_any_api_key():
         # Use real LLM with conversation history
-        result = _run_with_real_llm(org, {"input": message, "message": message}, history=history)
+        result = _run_with_real_llm(
+            org, {"input": message, "message": message}, history=history
+        )
         # Append to history
         history.append({"role": "user", "content": message})
         resp_text = result.get("response", "...")
@@ -563,6 +644,7 @@ async def chat_with_organism(request: Request):
 
 
 # ── Static files ───────────────────────────────────────────
+
 
 @app.get("/")
 def serve_index():

@@ -20,6 +20,7 @@ logger = logging.getLogger("ai_embryo.cells.llm")
 
 try:
     from openai import OpenAI
+
     HAS_OPENAI = True
 except ImportError:
     HAS_OPENAI = False
@@ -28,7 +29,7 @@ except ImportError:
 @CellRegistry.register()
 class LLMCell(Cell):
     """LLM 调用细胞
-    
+
     配置项（优先从 config 取，其次从 _genome 注入）：
         model: 模型名称
         temperature: 温度
@@ -44,22 +45,39 @@ class LLMCell(Cell):
 
         # 从 _genome 注入的信息（Embryo 发育时注入）
         genome_data = self.config.get("_genome")
-        
+
         # model_config
         mc = self.config.get("_model_config", {})
         self.model = self.config.get("model") or mc.get("model", "gpt-4")
         self.temperature = self.config.get("temperature") or mc.get("temperature", 0.7)
         self.max_tokens = self.config.get("max_tokens") or mc.get("max_tokens", 2000)
-        
-        self.api_key = self.config.get("api_key") or os.environ.get("OPENAI_API_KEY", "")
-        self.base_url = self.config.get("base_url") or os.environ.get("OPENAI_BASE_URL")
-        
+
+        # API Key 配置（支持多种环境变量）
+        minimax_key = os.environ.get("MINIMAX_API_KEY", "")
+        self.api_key = (
+            self.config.get("api_key")
+            or minimax_key
+            or os.environ.get("OPENAI_API_KEY", "")
+        )
+
+        # Base URL 配置：优先使用 config 中的值，否则检查 MINIMAX_API_KEY 自动设置
+        self.base_url = (
+            self.config.get("base_url")
+            or mc.get("base_url")
+            or os.environ.get("OPENAI_BASE_URL")
+            or ""
+        )
+        # 当检测到 MINIMAX_API_KEY 时自动设置 base_url
+        if minimax_key and not self.base_url:
+            self.base_url = "https://api.minimax.chat/v1"
+
         # 系统提示词：优先用显式配置，否则从 genome 自动编译
         if "system_prompt" in self.config:
             self.system_prompt = self.config["system_prompt"]
         elif genome_data:
             # 在 Embryo 发育时，genome 会被注入到 config["_genome"]
             from ..genome import Genome
+
             g = Genome()
             g.identity = genome_data.get("identity", {})
             g.blueprint = genome_data.get("blueprint", {})
@@ -78,7 +96,7 @@ class LLMCell(Cell):
     def process(self, input: dict[str, Any]) -> dict[str, Any]:
         """调用 LLM"""
         client = self._get_client()
-        
+
         # 构建消息
         if "messages" in input:
             messages = input["messages"]
@@ -86,10 +104,12 @@ class LLMCell(Cell):
             messages = []
             if self.system_prompt:
                 messages.append({"role": "system", "content": self.system_prompt})
-            
+
             if "previous_response" in input:
-                messages.append({"role": "assistant", "content": input["previous_response"]})
-            
+                messages.append(
+                    {"role": "assistant", "content": input["previous_response"]}
+                )
+
             user_input = input.get("input", "")
             if user_input:
                 messages.append({"role": "user", "content": user_input})
@@ -107,7 +127,12 @@ class LLMCell(Cell):
 
         # Function Calling
         tools = input.get("tools") or self.tools
-        if tools and isinstance(tools, list) and len(tools) > 0 and isinstance(tools[0], dict):
+        if (
+            tools
+            and isinstance(tools, list)
+            and len(tools) > 0
+            and isinstance(tools[0], dict)
+        ):
             kwargs["tools"] = tools
 
         try:
@@ -147,13 +172,13 @@ class LLMCell(Cell):
         if self._client is None:
             if not HAS_OPENAI:
                 raise CellError("需要安装 openai 包: pip install openai")
-            
+
             kwargs = {}
             if self.api_key:
                 kwargs["api_key"] = self.api_key
             if self.base_url:
                 kwargs["base_url"] = self.base_url
-                
+
             self._client = OpenAI(**kwargs)
         return self._client
 

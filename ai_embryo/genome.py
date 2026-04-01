@@ -33,7 +33,7 @@ from .exceptions import GenomeError, GenomeValidationError
 
 class Genome:
     """基因组 — AI 生命体的遗传密码
-    
+
     Attributes:
         name: 名称
         version: 版本
@@ -179,7 +179,9 @@ class Genome:
         if isinstance(evo, dict):
             mr = evo.get("mutation_rate", 0.1)
             if not (0.0 <= mr <= 1.0):
-                raise GenomeValidationError("evolution.mutation_rate 必须在 0.0-1.0 之间")
+                raise GenomeValidationError(
+                    "evolution.mutation_rate 必须在 0.0-1.0 之间"
+                )
 
         return True
 
@@ -187,7 +189,7 @@ class Genome:
 
     def get_traits(self, type_filter: str | None = None) -> list[dict]:
         """获取 traits，可按类型过滤
-        
+
         Args:
             type_filter: 类型过滤，支持通配符如 "prompt:*", "tool:*"
         """
@@ -196,9 +198,9 @@ class Genome:
             return traits
 
         if type_filter.endswith(":*"):
-            prefix = type_filter[:-1]  # "prompt:" 
+            prefix = type_filter[:-1]  # "prompt:"
             return [t for t in traits if t.get("type", "").startswith(prefix)]
-        
+
         return [t for t in traits if t.get("type") == type_filter]
 
     def get_trait_by_id(self, trait_id: str) -> dict | None:
@@ -210,7 +212,7 @@ class Genome:
 
     def compile_system_prompt(self) -> str:
         """从 identity.mind + prompt traits 编译完整的系统提示词
-        
+
         这是 mind（内在本质）和 prompt traits（外在表达调整）的合并。
         """
         parts = []
@@ -232,7 +234,7 @@ class Genome:
         # 3. 收集 prompt:* traits，按 weight 排序
         prompt_traits = self.get_traits("prompt:*")
         prompt_traits.sort(key=lambda t: t.get("weight", 0.5), reverse=True)
-        
+
         for trait in prompt_traits:
             content = trait.get("content", "")
             if content:
@@ -311,7 +313,9 @@ class Genome:
                     cog_parts.append("对自己的判断有准确的置信度感知")
 
             if cog_parts:
-                sections.append("【认知模式】\n" + "\n".join(f"- {p}" for p in cog_parts))
+                sections.append(
+                    "【认知模式】\n" + "\n".join(f"- {p}" for p in cog_parts)
+                )
 
         # 决策逻辑
         jdg = mind.get("judgment", {})
@@ -350,7 +354,9 @@ class Genome:
                 jdg_parts.append(f"判断优先级: {' > '.join(priorities)}")
 
             if jdg_parts:
-                sections.append("【决策逻辑】\n" + "\n".join(f"- {p}" for p in jdg_parts))
+                sections.append(
+                    "【决策逻辑】\n" + "\n".join(f"- {p}" for p in jdg_parts)
+                )
 
         # 表达方式
         voice = mind.get("voice", {})
@@ -394,7 +400,9 @@ class Genome:
                 voice_parts.append(e_map.get(emo, f"情感表达{emo}"))
 
             if voice_parts:
-                sections.append("【表达方式】\n" + "\n".join(f"- {p}" for p in voice_parts))
+                sections.append(
+                    "【表达方式】\n" + "\n".join(f"- {p}" for p in voice_parts)
+                )
 
         # 性格内核
         char = mind.get("character", {})
@@ -428,7 +436,9 @@ class Genome:
                 char_parts.append(wv_map.get(wv, f"世界观{wv}"))
 
             if char_parts:
-                sections.append("【性格内核】\n" + "\n".join(f"- {p}" for p in char_parts))
+                sections.append(
+                    "【性格内核】\n" + "\n".join(f"- {p}" for p in char_parts)
+                )
 
         if sections:
             return "=== 你的思维与人格 ===\n\n" + "\n\n".join(sections)
@@ -455,8 +465,10 @@ class Genome:
         if match:
             path = match.group(1)
             return self._get_by_path(path)
+
         def replacer(m):
             return str(self._get_by_path(m.group(1)))
+
         return re.sub(pattern, replacer, value)
 
     def _get_by_path(self, path: str) -> Any:
@@ -481,7 +493,7 @@ class Genome:
     @staticmethod
     def crossover(a: Genome, b: Genome) -> Genome:
         """基因交叉 — Trait 级别的精细交叉
-        
+
         规则：
         1. identity（含 mind）从主导父代继承
            - voice.tone/verbosity 和 character.quirks 有小概率（20%）从隐性父代混入
@@ -502,11 +514,11 @@ class Genome:
 
         # ── 1. 身份基因：从主导父代继承 ──
         child.identity = copy.deepcopy(dominant.identity)
-        
+
         # voice 和 quirks 有小概率混入隐性父代的特质
         rec_mind = recessive.identity.get("mind", {})
         child_mind = child.identity.setdefault("mind", {})
-        
+
         if rec_mind.get("voice") and random.random() < 0.2:
             rec_voice = rec_mind["voice"]
             child_voice = child_mind.setdefault("voice", {})
@@ -538,7 +550,9 @@ class Genome:
         # ── 3. Trait 级别交叉 ──
         evo = dominant.blueprint.get("evolution", {})
         te = evo.get("trait_evolution", {})
-        immutable_types = set(te.get("immutable_types", ["prompt:role", "behavior:guard"]))
+        immutable_types = set(
+            te.get("immutable_types", ["prompt:role", "behavior:guard"])
+        )
 
         dom_traits = dominant.blueprint.get("traits", [])
         rec_traits = recessive.blueprint.get("traits", [])
@@ -587,7 +601,8 @@ class Genome:
 
             # 同 type 不同 id → 随机选一个
             rec_same_type = [
-                t for t in rec_by_type.get(ttype, [])
+                t
+                for t in rec_by_type.get(ttype, [])
                 if t.get("id", "") not in used_rec_ids
             ]
             if rec_same_type and random.random() < 0.5:
@@ -617,14 +632,18 @@ class Genome:
 
     def mutate(self, mutation_rate: float | None = None) -> None:
         """对基因组进行变异（就地修改）
-        
+
         变异操作：
         1. model_config 数值参数微调
         2. mutable traits 的 weight/content 修改
         3. 可能增删 trait
         """
         evo = self.blueprint.get("evolution", {})
-        rate = mutation_rate if mutation_rate is not None else evo.get("mutation_rate", 0.1)
+        rate = (
+            mutation_rate
+            if mutation_rate is not None
+            else evo.get("mutation_rate", 0.1)
+        )
 
         # model_config 变异
         mc = self.blueprint.get("model_config", {})
@@ -634,12 +653,25 @@ class Genome:
 
         # trait 变异
         te = evo.get("trait_evolution", {})
-        mutable_types = set(te.get("mutable_types", [
-            "prompt:style", "prompt:format", "prompt:reasoning",
-            "prompt:knowledge", "tool:function", "skill",
-            "memory", "behavior:trigger", "behavior:workflow",
-        ]))
-        immutable_types = set(te.get("immutable_types", ["prompt:role", "behavior:guard"]))
+        mutable_types = set(
+            te.get(
+                "mutable_types",
+                [
+                    "prompt:style",
+                    "prompt:format",
+                    "prompt:reasoning",
+                    "prompt:knowledge",
+                    "tool:function",
+                    "skill",
+                    "memory",
+                    "behavior:trigger",
+                    "behavior:workflow",
+                ],
+            )
+        )
+        immutable_types = set(
+            te.get("immutable_types", ["prompt:role", "behavior:guard"])
+        )
 
         traits = self.blueprint.get("traits", [])
         for trait in traits:
@@ -649,9 +681,9 @@ class Genome:
             if ttype not in mutable_types:
                 continue
             if random.random() < rate:
-                self._mutate_trait(trait)
+                self._mutate_trait(trait, ttype)
 
-    def _mutate_trait(self, trait: dict) -> None:
+    def _mutate_trait(self, trait: dict, ttype: str = "") -> None:
         """变异单个 trait"""
         # weight 微调
         if "weight" in trait:
@@ -663,6 +695,10 @@ class Genome:
             for key, val in list(config.items()):
                 if isinstance(val, (int, float)) and random.random() < 0.3:
                     config[key] = self._mutate_value(val)
+                # discovery trait 的 list 类型参数可以变异
+                if isinstance(val, list) and ttype.startswith("discovery:"):
+                    if random.random() < 0.2 and val:
+                        self._mutate_list_param(config, key, val)
 
     @staticmethod
     def _mutate_value(val: Any) -> Any:
@@ -674,6 +710,31 @@ class Genome:
             delta = max(1, int(val * 0.3))
             return max(1, val + random.randint(-delta, delta))
         return val
+
+    @staticmethod
+    def _mutate_list_param(config: dict, key: str, val: list) -> None:
+        """变异 discovery trait 的 list 类型配置参数"""
+        mutation_type = random.choice(["add", "remove", "replace"])
+
+        if mutation_type == "add":
+            available_domains = [
+                "search",
+                "data",
+                "analysis",
+                "coding",
+                "creative",
+                "research",
+            ]
+            existing = set(str(v).lower() for v in val)
+            candidates = [d for d in available_domains if d not in existing]
+            if candidates:
+                config[key] = val + [random.choice(candidates)]
+        elif mutation_type == "remove" and len(val) > 1:
+            idx = random.randint(0, len(val) - 1)
+            config[key] = val[:idx] + val[idx + 1 :]
+        elif mutation_type == "replace" and val:
+            idx = random.randint(0, len(val) - 1)
+            config[key] = val[:idx] + [val[idx] + "_v2"] + val[idx + 1 :]
 
     # ── 字段访问工具 ─────────────────────────────────────
 
@@ -761,8 +822,14 @@ class Genome:
                 "fitness_metrics": ["accuracy"],
                 "trait_evolution": {
                     "mutable_types": [
-                        "prompt:style", "prompt:format", "prompt:reasoning",
-                        "prompt:knowledge", "tool:function", "skill",
+                        "prompt:style",
+                        "prompt:format",
+                        "prompt:reasoning",
+                        "prompt:knowledge",
+                        "tool:function",
+                        "skill",
+                        "discovery:skill",
+                        "discovery:mcp",
                     ],
                     "immutable_types": ["prompt:role", "behavior:guard"],
                     "crossover_unit": "trait",

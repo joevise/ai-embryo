@@ -45,7 +45,7 @@ identity:
 
 blueprint:
   model_config:
-    model: "gpt-4"
+    model: "MiniMax-M2.7"
     temperature: 0.9
     max_tokens: 3000
 

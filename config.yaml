@@ -6,10 +6,10 @@ server:
 # LLM Provider Configuration
 # Users configure their own API keys and models
 llm:
-  provider: "openai"  # openai / anthropic / custom
-  api_key: ""  # Set via env var AI_EMBRYO_API_KEY or here
-  base_url: ""  # Custom API endpoint (for OpenAI-compatible APIs like LiteLLM, MiniMax, etc.)
-  model: "gpt-4"
+  provider: "minimax"  # openai / anthropic / minimax / custom
+  api_key: ""  # Set via env var MINIMAX_API_KEY or AI_EMBRYO_API_KEY
+  base_url: "https://api.minimax.chat/v1"  # MiniMax API endpoint
+  model: "MiniMax-M2.7"
   temperature: 0.7
   max_tokens: 2000
 

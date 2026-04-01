@@ -59,7 +59,9 @@ class ConfigManager:
             self._deep_merge(self._config, file_config)
 
         # 环境变量覆盖
-        env_key = os.environ.get("AI_EMBRYO_API_KEY", "")
+        env_key = os.environ.get("AI_EMBRYO_API_KEY", "") or os.environ.get(
+            "MINIMAX_API_KEY", ""
+        )
         if env_key:
             self._config["llm"]["api_key"] = env_key
 
@@ -99,7 +101,9 @@ class ConfigManager:
         if self._config_path is None:
             return
         with open(self._config_path, "w", encoding="utf-8") as f:
-            yaml.dump(self._config, f, default_flow_style=False, allow_unicode=True, indent=2)
+            yaml.dump(
+                self._config, f, default_flow_style=False, allow_unicode=True, indent=2
+            )
 
     def has_api_key(self) -> bool:
         """检查是否配置了 API key"""
