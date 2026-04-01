@@ -1025,9 +1025,9 @@ textarea.input{resize:vertical;min-height:100px;line-height:1.6}
   </div>
   <div class="action-bar">
     <button class="btn btn-primary btn-sm" onclick="openWizard()">+ Create</button>
-    <button class="btn btn-secondary btn-sm" onclick="doCrossover()">Crossover</button>
+    <button class="btn btn-secondary btn-sm" onclick="handleCrossoverBtn()">Crossover</button>
     <button class="btn btn-secondary btn-sm" onclick="openEvolveModal()">Evolve</button>
-    <button class="btn btn-secondary btn-sm" onclick="toggleChat()" id="chat-toggle-btn">Chat</button>
+    <button class="btn btn-secondary btn-sm" onclick="handleChatBtn()" id="chat-toggle-btn">Chat</button>
   </div>
   <div id="detail-panel" class="detail-panel">
     <div class="detail-header">
@@ -1060,6 +1060,20 @@ textarea.input{resize:vertical;min-height:100px;line-height:1.6}
     <div class="detail-section" id="det-tools-section" style="display:none">
       <div class="detail-section-title">Equipped Tools</div>
       <div class="tool-list" id="det-tools"></div>
+    </div>
+    <div class="detail-section" id="crossover-hint" style="display:none">
+      <div style="padding:12px;background:#FFF8E1;border:1px solid #FF6B35;border-radius:var(--radius-sm);text-align:center;font-size:13px;color:var(--text)">
+        选择配对对象...
+      </div>
+    </div>
+    <div class="detail-section">
+      <div class="detail-section-title">Actions</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-primary btn-sm" onclick="toggleChat()">💬 Chat</button>
+        <button class="btn btn-secondary btn-sm" onclick="startCrossoverMode()">🧬 Crossover</button>
+        <button class="btn btn-secondary btn-sm" onclick="doMutate()">🔀 Mutate</button>
+        <button class="btn btn-secondary btn-sm" onclick="doDelete()" style="color:var(--error)">🗑️ Delete</button>
+      </div>
     </div>
     <div class="chat-box" id="chat-section" style="display:none">
       <div class="chat-header">
@@ -1340,6 +1354,10 @@ let currentModel = '—';
 let canvasOrgs = [];
 let animFrame;
 let discoverySource = 'all';
+let hoveredOrg = null;
+let crossoverMode = false;
+let crossoverFirst = null;
+let chatHistory = new Map();
 
 const MOCK_GENOMES = [
   {name:'AnalystAlpha',version:'1.0.0',yaml:`name: "AnalystAlpha"
@@ -1550,16 +1568,21 @@ function animate(){
     if(c.x<c.r||c.x>W-c.r)c.vx*=-1;
     if(c.y<c.r||c.y>H-c.r)c.vy*=-1;
     const pulse=1+Math.sin(t*1.5+c.phase)*.03;
-    const r=c.r*pulse;
+    const extraR=(c.org.fitness_history?.length||0)*2;
+    const isHovered=hoveredOrg&&hoveredOrg.name===c.org.name;
+    const scale=isHovered?1.1:1;
+    const r=(c.r+extraR)*pulse*scale;
     const sel=selectedOrg&&selectedOrg.name===c.org.name;
+    const dimmed=selectedOrg&&!sel;
     ctx.save();
+    if(dimmed){ctx.globalAlpha=0.4;}
     ctx.shadowColor='rgba(0,0,0,0.12)';ctx.shadowBlur=12;ctx.shadowOffsetY=4;
     ctx.beginPath();ctx.arc(c.x,c.y,r,0,Math.PI*2);
     ctx.fillStyle=c.color+'33';ctx.fill();
     ctx.shadowColor='transparent';
     ctx.strokeStyle=c.color+'88';ctx.lineWidth=sel?3:2;ctx.stroke();
     if(sel){
-      ctx.strokeStyle='#FF6B35';ctx.lineWidth=3;
+      ctx.strokeStyle='#FF6B35';ctx.lineWidth=2;
       ctx.beginPath();ctx.arc(c.x,c.y,r+5,0,Math.PI*2);ctx.stroke();
     }
     ctx.beginPath();ctx.arc(c.x,c.y,r*.25,0,Math.PI*2);ctx.fillStyle=c.color+'99';ctx.fill();
@@ -1571,7 +1594,7 @@ function animate(){
       ctx.fillStyle=c.color+'77';ctx.fill();
     }
     ctx.restore();
-    ctx.font='bold 11px Space Mono';ctx.fillStyle='#1A1A1A';ctx.textAlign='center';
+    ctx.font='bold 11px Space Mono';ctx.fillStyle=dimmed?'#999':'#1A1A1A';ctx.textAlign='center';
     ctx.fillText(c.org.name,c.x,c.y+r+18);
   });
   animFrame=requestAnimationFrame(animate);
@@ -1579,14 +1602,46 @@ function animate(){
 
 canvas.addEventListener('click',e=>{
   const rect=canvas.getBoundingClientRect();
-  const mx=(e.clientX-rect.left)*devicePixelRatio/rect.width*canvas.width/devicePixelRatio;
-  const my=(e.clientY-rect.top)*devicePixelRatio/rect.height*canvas.height/devicePixelRatio;
+  const x=e.clientX-rect.left;
+  const y=e.clientY-rect.top;
   let found=null;
   canvasOrgs.forEach(c=>{
-    const dx=mx-c.x,dy=my-c.y;
-    if(Math.sqrt(dx*dx+dy*dy)<c.r+10) found=c.org;
+    const dx=x-c.x,dy=y-c.y;
+    const r=c.r+10+(c.org.fitness_history?.length||0)*2;
+    if(dx*dx+dy*dy<r*r) found=c.org;
   });
-  if(found) selectOrganism(found);
+  if(found){
+    if(crossoverMode && crossoverFirst && crossoverFirst.name !== found.name){
+      doCrossoverWith(found);
+    } else {
+      selectOrganism(found);
+    }
+  } else {
+    if(crossoverMode){
+      cancelCrossoverMode();
+    } else {
+      deselectOrganism();
+    }
+  }
+});
+
+canvas.addEventListener('mousemove',e=>{
+  const rect=canvas.getBoundingClientRect();
+  const x=e.clientX-rect.left;
+  const y=e.clientY-rect.top;
+  let found=null;
+  canvasOrgs.forEach(c=>{
+    const dx=x-c.x,dy=y-c.y;
+    const r=c.r+10+(c.org.fitness_history?.length||0)*2;
+    if(dx*dx+dy*dy<r*r) found=c.org;
+  });
+  hoveredOrg=found;
+  canvas.style.cursor=found?'pointer':'default';
+});
+
+canvas.addEventListener('mouseleave',()=>{
+  hoveredOrg=null;
+  canvas.style.cursor='default';
 });
 
 function selectOrganism(o){
@@ -1598,7 +1653,6 @@ function selectOrganism(o){
   document.getElementById('det-model-name').textContent = o.model_config?.model || currentModel || '—';
   document.getElementById('chat-model-name').textContent = o.model_config?.model || currentModel || '—';
 
-  // Status badge
   const statusBadge = document.getElementById('det-status-badge');
   const statusText = document.getElementById('det-status-text');
   if(isLive){
@@ -1609,7 +1663,6 @@ function selectOrganism(o){
     statusText.textContent='Demo';
   }
 
-  // Mind cards
   const mc=document.getElementById('det-mind');mc.innerHTML='';
   if(o.mind){
     Object.entries(o.mind).forEach(([k,v])=>{
@@ -1618,14 +1671,12 @@ function selectOrganism(o){
     });
   }
 
-  // Traits
   const tp=document.getElementById('det-traits');tp.innerHTML='';
   (o.traits||[]).forEach(t=>{
     const cls = t.type==='tool'?'tool':t.type==='skill'?'skill':t.type==='discovery'?'discovery':'prompt';
     tp.innerHTML+=`<span class="trait-pill ${cls}">${t.type||''}:${t.value||t.category||''}</span>`;
   });
 
-  // Tools section
   const toolSection = document.getElementById('det-tools-section');
   const toolList = document.getElementById('det-tools');
   const tools = (o.traits||[]).filter(t=>t.type==='tool'||t.type==='discovery');
@@ -1644,6 +1695,19 @@ function selectOrganism(o){
   } else {
     toolSection.style.display='none';
   }
+
+  if(!chatHistory.has(o.name)) chatHistory.set(o.name,[]);
+  const hist=chatHistory.get(o.name);
+  const box=document.getElementById('chat-messages');
+  box.innerHTML=hist.map(m=>`<div class="chat-msg ${m.from}">${esc(m.msg)}</div>`).join('');
+  box.scrollTop=box.scrollHeight;
+  document.getElementById('chat-section').style.display='none';
+}
+
+function deselectOrganism(){
+  selectedOrg=null;
+  document.getElementById('detail-panel').classList.remove('visible');
+  document.getElementById('chat-section').style.display='none';
 }
 
 // ── CHAT ──
@@ -1653,13 +1717,17 @@ function toggleChat(){
   cs.style.display=cs.style.display==='none'?'block':'none';
 }
 async function sendChat(){
+  if(!selectedOrg) return;
   const inp=document.getElementById('chat-input');
   const msg=inp.value.trim();if(!msg)return;inp.value='';
   const box=document.getElementById('chat-messages');
+  if(!chatHistory.has(selectedOrg.name)) chatHistory.set(selectedOrg.name,[]);
+  chatHistory.get(selectedOrg.name).push({from:'user',msg});
   box.innerHTML+=`<div class="chat-msg user">${esc(msg)}</div>`;
   box.scrollTop=box.scrollHeight;
   const res=await apiFetch('/chat',{method:'POST',body:JSON.stringify({name:selectedOrg.name,message:msg})});
   const reply=res?.response||res?.reply||mockReply(msg);
+  chatHistory.get(selectedOrg.name).push({from:'ai',msg:reply});
   box.innerHTML+=`<div class="chat-msg ai">${esc(reply)}</div>`;
   box.scrollTop=box.scrollHeight;
 }
@@ -1682,7 +1750,8 @@ let wizardData = {
 const PERSONAS = [
   { id:'analytical', icon:'🔬', name:'Analyst', traits:'analytical, decisive, sharp, concise', mind:{cognition:{thinking_style:'analytical',depth:'deep'},judgment:{decision_style:'decisive',risk_tolerance:'low'},voice:{tone:'sharp',directness:'direct',verbosity:'concise'}}},
   { id:'creative', icon:'🎨', name:'Creative', traits:'creative, collaborative, warm, thorough', mind:{cognition:{thinking_style:'creative',depth:'broad'},judgment:{decision_style:'collaborative',risk_tolerance:'high'},voice:{tone:'warm',directness:'indirect',verbosity:'expressive'}}},
-  { id:'executive', icon:'⚡', name:'Executive', traits:'systematic, balanced, direct, minimal', mind:{cognition:{thinking_style:'systematic',depth:'deep'},judgment:{decision_style:'decisive',risk_tolerance:'balanced'},voice:{tone:'serious',directness:'direct',verbosity:'minimal'}}}
+  { id:'executive', icon:'⚡', name:'Executive', traits:'systematic, balanced, direct, minimal', mind:{cognition:{thinking_style:'systematic',depth:'deep'},judgment:{decision_style:'decisive',risk_tolerance:'balanced'},voice:{tone:'serious',directness:'direct',verbosity:'minimal'}}},
+  { id:'custom', icon:'🛠️', name:'Custom', traits:'自定义参数', mind:null}
 ];
 
 function openWizard(){
@@ -1746,6 +1815,7 @@ function wizardBack(){
   }
 }
 function renderStep1(){
+  const isCustom = wizardData.persona?.id === 'custom';
   return `
     <div class="form-group">
       <label class="form-label">Name</label>
@@ -1767,12 +1837,94 @@ function renderStep1(){
         `).join('')}
       </div>
     </div>
+    ${isCustom ? `
+    <div style="margin-top:20px;padding:16px;background:var(--bg2);border-radius:var(--radius-sm);border:1px solid var(--border)">
+      <div class="form-label" style="margin-bottom:12px">Custom Mind Parameters</div>
+      <div class="grid-2" style="gap:12px">
+        <div class="form-group" style="margin:0">
+          <label class="form-label" style="font-size:10px;margin-bottom:6px">Thinking Style</label>
+          <div class="select-wrap">
+            <select class="input" id="custom-thinking_style" style="font-size:12px;padding:8px 12px">
+              <option value="analytical">analytical</option>
+              <option value="creative">creative</option>
+              <option value="systematic">systematic</option>
+              <option value="intuitive">intuitive</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label" style="font-size:10px;margin-bottom:6px">Depth</label>
+          <div class="select-wrap">
+            <select class="input" id="custom-depth" style="font-size:12px;padding:8px 12px">
+              <option value="surface">surface</option>
+              <option value="moderate">moderate</option>
+              <option value="deep">deep</option>
+              <option value="philosophical">philosophical</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label" style="font-size:10px;margin-bottom:6px">Decision Style</label>
+          <div class="select-wrap">
+            <select class="input" id="custom-decision_style" style="font-size:12px;padding:8px 12px">
+              <option value="decisive">decisive</option>
+              <option value="cautious">cautious</option>
+              <option value="collaborative">collaborative</option>
+              <option value="data_driven">data_driven</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label" style="font-size:10px;margin-bottom:6px">Risk Tolerance</label>
+          <div class="select-wrap">
+            <select class="input" id="custom-risk_tolerance" style="font-size:12px;padding:8px 12px">
+              <option value="conservative">conservative</option>
+              <option value="balanced">balanced</option>
+              <option value="aggressive">aggressive</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label" style="font-size:10px;margin-bottom:6px">Tone</label>
+          <div class="select-wrap">
+            <select class="input" id="custom-tone" style="font-size:12px;padding:8px 12px">
+              <option value="serious">serious</option>
+              <option value="warm">warm</option>
+              <option value="humorous">humorous</option>
+              <option value="sharp">sharp</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label" style="font-size:10px;margin-bottom:6px">Directness</label>
+          <div class="select-wrap">
+            <select class="input" id="custom-directness" style="font-size:12px;padding:8px 12px">
+              <option value="direct">direct</option>
+              <option value="diplomatic">diplomatic</option>
+              <option value="socratic">socratic</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label" style="font-size:10px;margin-bottom:6px">Verbosity</label>
+          <div class="select-wrap">
+            <select class="input" id="custom-verbosity" style="font-size:12px;padding:8px 12px">
+              <option value="minimal">minimal</option>
+              <option value="concise">concise</option>
+              <option value="thorough">thorough</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+    ` : ''}
   `;
 }
 function selectPersona(id){
   wizardData.persona = PERSONAS.find(p => p.id === id);
   document.querySelectorAll('.persona-card').forEach(c => c.classList.remove('selected'));
   document.querySelector(`.persona-card[onclick="selectPersona('${id}')"]`).classList.add('selected');
+  if(wizardStep === 1) renderWizardStep();
   updateNextBtn();
 }
 function updateNextBtn(){
@@ -1862,25 +2014,55 @@ function renderStep3(){
 async function submitWizard(){
   const persona = wizardData.persona;
   const selectedTools = wizardData.discoveredTools.filter(t => wizardData.selectedTools.includes(t.name));
-  const yaml = `name: "${wizardData.name}"
-version: "1.0.0"
-identity:
-  purpose: "${wizardData.purpose}"
-  mind:
-    cognition:
-      thinking_style: ${persona.mind.cognition.thinking_style}
-      depth: ${persona.mind.cognition.depth}
-    judgment:
-      decision_style: ${persona.mind.judgment.decision_style}
-      risk_tolerance: ${persona.mind.judgment.risk_tolerance}
-    voice:
-      tone: ${persona.mind.voice.tone}
-      directness: ${persona.mind.voice.directness}
-      verbosity: ${persona.mind.voice.verbosity}
-  traits:
-    - type: prompt
-      category: style
-      value: ${persona.id}`;
+  let yaml;
+  if(persona.id === 'custom'){
+    const ts = document.getElementById('custom-thinking_style')?.value || 'analytical';
+    const depth = document.getElementById('custom-depth')?.value || 'moderate';
+    const ds = document.getElementById('custom-decision_style')?.value || 'balanced';
+    const rt = document.getElementById('custom-risk_tolerance')?.value || 'balanced';
+    const tone = document.getElementById('custom-tone')?.value || 'warm';
+    const dir = document.getElementById('custom-directness')?.value || 'direct';
+    const verb = document.getElementById('custom-verbosity')?.value || 'concise';
+    yaml = `name: "${wizardData.name}"
+ version: "1.0.0"
+ identity:
+   purpose: "${wizardData.purpose}"
+   mind:
+     cognition:
+       thinking_style: ${ts}
+       depth: ${depth}
+     judgment:
+       decision_style: ${ds}
+       risk_tolerance: ${rt}
+     voice:
+       tone: ${tone}
+       directness: ${dir}
+       verbosity: ${verb}
+   traits:
+     - type: prompt
+       category: style
+       value: custom`;
+  } else {
+    yaml = `name: "${wizardData.name}"
+ version: "1.0.0"
+ identity:
+   purpose: "${wizardData.purpose}"
+   mind:
+     cognition:
+       thinking_style: ${persona.mind.cognition.thinking_style}
+       depth: ${persona.mind.cognition.depth}
+     judgment:
+       decision_style: ${persona.mind.judgment.decision_style}
+       risk_tolerance: ${persona.mind.judgment.risk_tolerance}
+     voice:
+       tone: ${persona.mind.voice.tone}
+       directness: ${persona.mind.voice.directness}
+       verbosity: ${persona.mind.voice.verbosity}
+   traits:
+     - type: prompt
+       category: style
+       value: ${persona.id}`;
+  }
   
   const genomeRes = await apiFetch('/genomes',{method:'POST',body:JSON.stringify({
     yaml,
@@ -1963,20 +2145,56 @@ async function startEvolve(){
 }
 
 // ── CROSSOVER ──
-async function doCrossover(){
-  if(organisms.length<2){toast('Need at least 2 organisms','info');return;}
-  const a=organisms[0].name,b=organisms[1].name;
-  const res=await apiFetch('/crossover',{method:'POST',body:JSON.stringify({parent_a:a,parent_b:b})});
+function startCrossoverMode(){
+  if(!selectedOrg){toast('请先选中一个生命体','info');return;}
+  crossoverMode=true;
+  crossoverFirst=selectedOrg;
+  document.getElementById('crossover-hint').style.display='block';
+  toast('点击另一个生命体完成配对','info');
+}
+
+function cancelCrossoverMode(){
+  crossoverMode=false;
+  crossoverFirst=null;
+  document.getElementById('crossover-hint').style.display='none';
+}
+
+async function doCrossoverWith(secondOrg){
+  const first=crossoverFirst;
+  crossoverMode=false;
+  crossoverFirst=null;
+  document.getElementById('crossover-hint').style.display='none';
+  const res=await apiFetch('/crossover',{method:'POST',body:JSON.stringify({name_a:first.name,name_b:secondOrg.name})});
   if(res && res.organism){
     organisms.push(res.organism);
     toast('Crossover successful!','success');
     initCanvas();updateSysInfo();populateCompareDropdowns();
-  }else{
-    const hybrid={name:`Hybrid_${Date.now()%1000}`,generation:2,fitness:+(((organisms[0].fitness||.8)+(organisms[1].fitness||.7))/2+Math.random()*.05).toFixed(3),genome:'hybrid',mind:{cognition:{thinking_style:'balanced'},judgment:{decision_style:'adaptive'},voice:{tone:'warm'}},traits:[...(organisms[0].traits||[]).slice(0,2),...(organisms[1].traits||[]).slice(0,2)]};
+  } else {
+    const hybrid={name:`Hybrid_${Date.now()%1000}`,generation:Math.max(first.generation||1,secondOrg.generation||1)+1,fitness:+(((first.fitness||.8)+(secondOrg.fitness||.7))/2+Math.random()*.05).toFixed(3),genome:'hybrid',mind:{cognition:{thinking_style:'balanced'},judgment:{decision_style:'adaptive'},voice:{tone:'warm'}},traits:[...(first.traits||[]).slice(0,2),...(secondOrg.traits||[]).slice(0,2)]};
     organisms.push(hybrid);
     toast('Crossover (demo)','success');
-    initCanvas();updateSysInfo();populateCompareDropdowns();
-  }
+  initCanvas();updateSysInfo();populateCompareDropdowns();
+}
+
+function handleCrossoverBtn(){
+  if(!selectedOrg){toast('请先选中一个生命体','info');return;}
+  doCrossover();
+}
+
+function handleChatBtn(){
+  if(!selectedOrg){toast('请先选中一个生命体','info');return;}
+  toggleChat();
+}
+
+// ── DELETE ──
+function doDelete(){
+  if(!selectedOrg){toast('请先选中一个生命体','info');return;}
+  if(!confirm(`Delete ${selectedOrg.name}?`)) return;
+  organisms=organisms.filter(o=>o.name!==selectedOrg.name);
+  chatHistory.delete(selectedOrg.name);
+  deselectOrganism();
+  toast('Organism deleted','info');
+  initCanvas();updateSysInfo();populateCompareDropdowns();
 }
 
 // ── LAB ──
