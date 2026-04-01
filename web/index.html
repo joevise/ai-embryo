@@ -2187,6 +2187,19 @@ function handleChatBtn(){
   toggleChat();
 }
 
+// ── MUTATE ──
+async function doMutate(){
+  if(!selectedOrg){toast('请先选中一个生命体','info');return;}
+  const res=await apiFetch('/mutate',{method:'POST',body:JSON.stringify({name:selectedOrg.name})});
+  if(res && res.organism){
+    organisms.push(res.organism);
+    toast('Mutation created: '+res.organism.name,'success');
+    initCanvas();updateSysInfo();populateCompareDropdowns();
+  } else {
+    toast('Mutation failed','error');
+  }
+}
+
 // ── DELETE ──
 function doDelete(){
   if(!selectedOrg){toast('请先选中一个生命体','info');return;}

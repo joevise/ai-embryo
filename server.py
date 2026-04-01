@@ -468,8 +468,8 @@ async def run_organism(request: Request):
 @app.post("/api/crossover")
 async def crossover_genomes(request: Request):
     body = await request.json()
-    name_a = body.get("parent_a", "")
-    name_b = body.get("parent_b", "")
+    name_a = body.get("parent_a", "") or body.get("name_a", "")
+    name_b = body.get("parent_b", "") or body.get("name_b", "")
 
     ga = genomes_store.get(name_a)
     gb = genomes_store.get(name_b)
@@ -491,7 +491,7 @@ async def crossover_genomes(request: Request):
             + 1
         )
         organisms_store[child.name] = org
-        return {"status": "ok", "child": organism_to_info(org)}
+        return {"status": "ok", "child": organism_to_info(org), "organism": organism_to_info(org)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -514,7 +514,7 @@ async def mutate_genome(request: Request):
     try:
         org = Embryo.develop(mutated)
         organisms_store[mutated.name] = org
-        return {"status": "ok", "mutated": organism_to_info(org)}
+        return {"status": "ok", "mutated": organism_to_info(org), "organism": organism_to_info(org)}
     except Exception as e:
         return {
             "status": "ok",
