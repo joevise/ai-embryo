@@ -96,8 +96,8 @@ class MockLLMCell(Cell):
 class RealLLMCell(Cell):
     """Real LLM Cell that calls OpenAI-compatible API."""
 
-    def __init__(self, config_dict: dict[str, Any] | None = None):
-        super().__init__(config_dict)
+    def __init__(self, config: dict[str, Any] | None = None):
+        super().__init__(config)
         self._client = None
 
     def _get_client(self):
