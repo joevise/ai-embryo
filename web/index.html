@@ -2173,7 +2173,8 @@ async function doCrossoverWith(secondOrg){
     const hybrid={name:`Hybrid_${Date.now()%1000}`,generation:Math.max(first.generation||1,secondOrg.generation||1)+1,fitness:+(((first.fitness||.8)+(secondOrg.fitness||.7))/2+Math.random()*.05).toFixed(3),genome:'hybrid',mind:{cognition:{thinking_style:'balanced'},judgment:{decision_style:'adaptive'},voice:{tone:'warm'}},traits:[...(first.traits||[]).slice(0,2),...(secondOrg.traits||[]).slice(0,2)]};
     organisms.push(hybrid);
     toast('Crossover (demo)','success');
-  initCanvas();updateSysInfo();populateCompareDropdowns();
+    initCanvas();updateSysInfo();populateCompareDropdowns();
+  }
 }
 
 function handleCrossoverBtn(){
