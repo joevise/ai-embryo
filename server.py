@@ -33,24 +33,6 @@ from ai_embryo.config_manager import ConfigManager
 from ai_embryo.organism_package import OrganismPackage
 from ai_embryo.evolution_llm import LLMEvolutionEngine, MockLLMEvolutionEngine
 
-# ── LLM Evolution Engine ────────────────────────────────────
-
-
-def _create_evolution_engine() -> LLMEvolutionEngine | MockLLMEvolutionEngine:
-    """Create LLM evolution engine based on API key availability"""
-    if _has_any_api_key():
-        return LLMEvolutionEngine(
-            api_key=config.get("llm.api_key", "")
-            or os.environ.get("MINIMAX_API_KEY", ""),
-            base_url=config.get("llm.base_url", "")
-            or os.environ.get("AI_EMBRYO_BASE_URL", ""),
-            model=config.get("llm.model", "MiniMax-M2.7"),
-        )
-    return MockLLMEvolutionEngine()
-
-
-evolution_engine = _create_evolution_engine()
-
 # ── Configuration ──────────────────────────────────────────
 
 config = ConfigManager()
@@ -200,6 +182,25 @@ def _has_any_api_key() -> bool:
     if os.environ.get("AI_EMBRYO_API_KEY", ""):
         return True
     return False
+
+
+# ── LLM Evolution Engine ────────────────────────────────────
+
+
+def _create_evolution_engine():
+    """Create LLM evolution engine based on API key availability"""
+    if _has_any_api_key():
+        return LLMEvolutionEngine(
+            api_key=config.get("llm.api_key", "")
+            or os.environ.get("MINIMAX_API_KEY", ""),
+            base_url=config.get("llm.base_url", "")
+            or os.environ.get("AI_EMBRYO_BASE_URL", ""),
+            model=config.get("llm.model", "MiniMax-M2.7"),
+        )
+    return MockLLMEvolutionEngine()
+
+
+evolution_engine = _create_evolution_engine()
 
 
 def register_llm_cell():
