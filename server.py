@@ -605,6 +605,35 @@ def list_organisms():
     return {"organisms": [organism_to_info(o) for o in organisms_store.values()]}
 
 
+@app.post("/api/discover")
+async def discover_tools(request: Request):
+    """调用 DiscoveryCell 发现工具"""
+    body = await request.json()
+    task = body.get("task", "")
+    source = body.get("source", "all")
+
+    try:
+        from ai_embryo.cells.discovery_cell import DiscoveryCell
+
+        cell = DiscoveryCell(
+            {
+                "source": source,
+                "max_tools": 10,
+                "preference_domains": [],
+            }
+        )
+        result = cell.process({"task": task})
+        return result
+    except Exception as e:
+        return {
+            "available_tools": [],
+            "recommended_tools": [],
+            "response": f"Discovery error: {str(e)}",
+            "source": source,
+            "task": task,
+        }
+
+
 @app.post("/api/chat")
 async def chat_with_organism(request: Request):
     body = await request.json()
