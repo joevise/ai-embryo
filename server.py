@@ -304,7 +304,10 @@ def _run_with_real_llm(
 
 @app.get("/api/config")
 def get_config():
-    return {"config": config.get_masked_config()}
+    return {
+        "config": config.get_masked_config(),
+        "mode": "live" if _has_any_api_key() else "demo",
+    }
 
 
 @app.post("/api/config")
@@ -383,6 +386,24 @@ async def create_genome(request: Request):
 
     try:
         g = Genome.from_dict(data)
+
+        discovered_tools = body.get("discovered_tools", [])
+        for tool in discovered_tools:
+            tool_name = tool.get("name", "")
+            g.blueprint.setdefault("traits", []).append(
+                {
+                    "id": f"tool_{tool_name.replace(' ', '_').lower()}",
+                    "type": "tool:function",
+                    "name": tool_name,
+                    "config": {
+                        "function_name": tool_name.replace(" ", "_").lower(),
+                        "description": tool.get("description", ""),
+                        "source": tool.get("source", "clawhub"),
+                    },
+                    "weight": 0.6,
+                }
+            )
+
         genomes_store[g.name] = g
         return {"status": "ok", "genome": genome_to_info(g)}
     except Exception as e:
