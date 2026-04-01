@@ -30,6 +30,26 @@ from ai_embryo import (
     Task,
 )
 from ai_embryo.config_manager import ConfigManager
+from ai_embryo.organism_package import OrganismPackage
+from ai_embryo.evolution_llm import LLMEvolutionEngine, MockLLMEvolutionEngine
+
+# ── LLM Evolution Engine ────────────────────────────────────
+
+
+def _create_evolution_engine() -> LLMEvolutionEngine | MockLLMEvolutionEngine:
+    """Create LLM evolution engine based on API key availability"""
+    if _has_any_api_key():
+        return LLMEvolutionEngine(
+            api_key=config.get("llm.api_key", "")
+            or os.environ.get("MINIMAX_API_KEY", ""),
+            base_url=config.get("llm.base_url", "")
+            or os.environ.get("AI_EMBRYO_BASE_URL", ""),
+            model=config.get("llm.model", "MiniMax-M2.7"),
+        )
+    return MockLLMEvolutionEngine()
+
+
+evolution_engine = _create_evolution_engine()
 
 # ── Configuration ──────────────────────────────────────────
 
@@ -199,11 +219,13 @@ app = FastAPI(title="AI Embryo Engine — Petri Dish")
 PROJECT_ROOT = Path(__file__).parent
 EXAMPLES_DIR = PROJECT_ROOT / "examples"
 WEB_DIR = PROJECT_ROOT / "web"
+ORGANISMS_DIR = PROJECT_ROOT / "data" / "organisms"
 
 # Runtime storage
 genomes_store: dict[str, Genome] = {}
 organisms_store: dict[str, Organism] = {}
 chat_history: dict[str, list[dict]] = {}  # per-organism chat history
+package_store: dict[str, OrganismPackage] = {}  # filesystem-based organism packages
 
 
 def load_example_genomes():
@@ -226,6 +248,26 @@ def load_example_genomes():
 
 
 load_example_genomes()
+
+
+def load_organism_packages():
+    """Load all organism packages from filesystem."""
+    if not ORGANISMS_DIR.exists():
+        ORGANISMS_DIR.mkdir(parents=True, exist_ok=True)
+        return
+
+    for org_dir in ORGANISMS_DIR.iterdir():
+        if org_dir.is_dir():
+            try:
+                pkg = OrganismPackage.load(org_dir)
+                if pkg:
+                    package_store[pkg.name] = pkg
+                    print(f"  📦 Loaded package: {pkg.name}")
+            except Exception as e:
+                print(f"  ⚠️ Failed to load package {org_dir.name}: {e}")
+
+
+load_organism_packages()
 
 
 def auto_develop_genomes():
@@ -303,7 +345,6 @@ def _run_with_real_llm(
     if not _has_any_api_key():
         return org.run(input_data)
 
-    # Use RealLLMCell directly with organism's system prompt
     cell = RealLLMCell(
         {
             "system_prompt": _get_organism_system_prompt(org),
@@ -313,6 +354,27 @@ def _run_with_real_llm(
     if history:
         cell_input["history"] = history
     return cell.process(cell_input)
+
+
+async def _trigger_reflection(
+    name: str, pkg: OrganismPackage, history: list[dict]
+) -> None:
+    """Trigger reflection for an organism after conversation milestones."""
+    try:
+        reflection_result = await evolution_engine.reflect(pkg, history)
+        if reflection_result:
+            memory_update = reflection_result.get("memory_update", "")
+            if memory_update:
+                pkg.add_reflection(
+                    f"# 定期反思\n\n{memory_update}\n\n自评分数: {reflection_result.get('fitness_self_score', 0.5)}"
+                )
+
+            mind_updates = reflection_result.get("mind_updates", "")
+            if mind_updates:
+                current_mind = pkg.read_mind()
+                pkg.write_mind(current_mind + f"\n\n# 更新\n{mind_updates}")
+    except Exception as e:
+        print(f"Reflection error for {name}: {e}")
 
 
 # ── Config API Routes ──────────────────────────────────────
@@ -471,8 +533,25 @@ async def crossover_genomes(request: Request):
     name_a = body.get("parent_a", "") or body.get("name_a", "")
     name_b = body.get("parent_b", "") or body.get("name_b", "")
 
+    pkg_a = package_store.get(name_a)
+    pkg_b = package_store.get(name_b)
     ga = genomes_store.get(name_a)
     gb = genomes_store.get(name_b)
+
+    if pkg_a and pkg_b:
+        try:
+            child_pkg = await evolution_engine.crossover(pkg_a, pkg_b)
+            if child_pkg:
+                package_store[child_pkg.name] = child_pkg
+                return {
+                    "status": "ok",
+                    "child": child_pkg.to_info(),
+                    "organism": child_pkg.to_info(),
+                    "reasoning": "LLM-driven crossover",
+                }
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Crossover failed: {e}")
+
     if not ga:
         raise HTTPException(status_code=404, detail=f"Genome '{name_a}' not found")
     if not gb:
@@ -491,7 +570,11 @@ async def crossover_genomes(request: Request):
             + 1
         )
         organisms_store[child.name] = org
-        return {"status": "ok", "child": organism_to_info(org), "organism": organism_to_info(org)}
+        return {
+            "status": "ok",
+            "child": organism_to_info(org),
+            "organism": organism_to_info(org),
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -514,7 +597,11 @@ async def mutate_genome(request: Request):
     try:
         org = Embryo.develop(mutated)
         organisms_store[mutated.name] = org
-        return {"status": "ok", "mutated": organism_to_info(org), "organism": organism_to_info(org)}
+        return {
+            "status": "ok",
+            "mutated": organism_to_info(org),
+            "organism": organism_to_info(org),
+        }
     except Exception as e:
         return {
             "status": "ok",
@@ -677,36 +764,222 @@ async def chat_with_organism(request: Request):
     name = body.get("name", "")
     message = body.get("message", "")
 
+    pkg = package_store.get(name)
     org = organisms_store.get(name)
-    if not org:
+
+    if not pkg and not org:
         raise HTTPException(status_code=404, detail=f"Organism '{name}' not found")
 
-    # Maintain per-organism chat history
     if name not in chat_history:
         chat_history[name] = []
 
     history = chat_history[name]
 
     if _has_any_api_key():
-        # Use real LLM with conversation history
-        result = _run_with_real_llm(
-            org, {"input": message, "message": message}, history=history
-        )
-        # Append to history
+        if pkg:
+            system_prompt = pkg.compile_system_prompt()
+            cell = RealLLMCell({"system_prompt": system_prompt})
+            messages = []
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+            if history:
+                messages.extend(history)
+            messages.append({"role": "user", "content": message})
+            result = cell.process({"messages": messages})
+        else:
+            result = _run_with_real_llm(
+                org, {"input": message, "message": message}, history=history
+            )
+
         history.append({"role": "user", "content": message})
         resp_text = result.get("response", "...")
         history.append({"role": "assistant", "content": resp_text})
-        # Keep history bounded (last 50 messages)
+
+        if pkg:
+            pkg.update_memory({"user": message, "assistant": resp_text})
+
+            if len(history) >= 10 and len(history) % 5 == 0:
+                asyncio.create_task(_trigger_reflection(name, pkg, history))
+
         if len(history) > 50:
             chat_history[name] = history[-50:]
     else:
-        result = org.run({"input": message, "message": message})
+        if org:
+            result = org.run({"input": message, "message": message})
+        else:
+            result = {"response": "No organism found and no API key configured"}
 
     return {
         "status": "ok",
         "response": result.get("response", "..."),
         "meta": result.get("_meta", {}),
     }
+
+
+# ── Organism Package API ──────────────────────────────────
+
+
+@app.post("/api/genomes")
+async def create_genome(request: Request):
+    """Create new genome - uses OrganismPackage when package-based creation is requested."""
+    body = await request.json()
+
+    use_package = body.get("use_package", False)
+    name = body.get("name", "")
+    purpose = body.get("purpose", "")
+    persona = body.get("persona", {})
+
+    if use_package and name and purpose:
+        pkg = OrganismPackage.create(
+            base_dir=ORGANISMS_DIR / name,
+            name=name,
+            purpose=purpose,
+            persona_config=persona,
+        )
+        package_store[pkg.name] = pkg
+        return {"status": "ok", "package": pkg.to_info()}
+
+    if isinstance(body, str):
+        data = yaml.safe_load(body)
+    elif "yaml" in body:
+        data = yaml.safe_load(body["yaml"])
+    else:
+        data = body
+
+    try:
+        g = Genome.from_dict(data)
+
+        discovered_tools = body.get("discovered_tools", [])
+        for tool in discovered_tools:
+            tool_name = tool.get("name", "")
+            g.blueprint.setdefault("traits", []).append(
+                {
+                    "id": f"tool_{tool_name.replace(' ', '_').lower()}",
+                    "type": "tool:function",
+                    "name": tool_name,
+                    "config": {
+                        "function_name": tool_name.replace(" ", "_").lower(),
+                        "description": tool.get("description", ""),
+                        "source": tool.get("source", "clawhub"),
+                    },
+                    "weight": 0.6,
+                }
+            )
+
+        genomes_store[g.name] = g
+        return {"status": "ok", "genome": genome_to_info(g)}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/organisms")
+def list_organisms():
+    """List all organisms from filesystem packages."""
+    organisms = []
+    for name, pkg in package_store.items():
+        organisms.append(pkg.to_info())
+    for name, org in organisms_store.items():
+        if name not in package_store:
+            organisms.append(organism_to_info(org))
+    return {"organisms": organisms}
+
+
+@app.get("/api/organisms/{name}/package")
+def get_organism_package(name: str):
+    """Get full package info for an organism."""
+    pkg = package_store.get(name)
+    if not pkg:
+        raise HTTPException(status_code=404, detail=f"Organism '{name}' not found")
+    return pkg.to_info()
+
+
+@app.get("/api/organisms/{name}/soul")
+def get_organism_soul(name: str):
+    """Get SOUL.md content for an organism."""
+    pkg = package_store.get(name)
+    if not pkg:
+        raise HTTPException(status_code=404, detail=f"Organism '{name}' not found")
+    return {"name": name, "soul": pkg.read_soul()}
+
+
+@app.put("/api/organisms/{name}/soul")
+async def update_organism_soul(name: str, request: Request):
+    """Update SOUL.md content for an organism."""
+    pkg = package_store.get(name)
+    if not pkg:
+        raise HTTPException(status_code=404, detail=f"Organism '{name}' not found")
+
+    body = await request.json()
+    content = body.get("soul", "")
+    pkg.write_soul(content)
+    return {"status": "ok", "name": name}
+
+
+@app.get("/api/organisms/{name}/mind")
+def get_organism_mind(name: str):
+    """Get MIND.md content for an organism."""
+    pkg = package_store.get(name)
+    if not pkg:
+        raise HTTPException(status_code=404, detail=f"Organism '{name}' not found")
+    return {"name": name, "mind": pkg.read_mind()}
+
+
+@app.put("/api/organisms/{name}/mind")
+async def update_organism_mind(name: str, request: Request):
+    """Update MIND.md content for an organism."""
+    pkg = package_store.get(name)
+    if not pkg:
+        raise HTTPException(status_code=404, detail=f"Organism '{name}' not found")
+
+    body = await request.json()
+    content = body.get("mind", "")
+    pkg.write_mind(content)
+    return {"status": "ok", "name": name}
+
+
+@app.get("/api/organisms/{name}/values")
+def get_organism_values(name: str):
+    """Get VALUES.md content for an organism."""
+    pkg = package_store.get(name)
+    if not pkg:
+        raise HTTPException(status_code=404, detail=f"Organism '{name}' not found")
+    return {"name": name, "values": pkg.read_values()}
+
+
+@app.put("/api/organisms/{name}/values")
+async def update_organism_values(name: str, request: Request):
+    """Update VALUES.md content for an organism."""
+    pkg = package_store.get(name)
+    if not pkg:
+        raise HTTPException(status_code=404, detail=f"Organism '{name}' not found")
+
+    body = await request.json()
+    content = body.get("values", "")
+    pkg.write_values(content)
+    return {"status": "ok", "name": name}
+
+
+@app.post("/api/organisms/{name}/feedback")
+async def submit_feedback(name: str, request: Request):
+    """Submit feedback for an organism to trigger reflection and DNA update."""
+    pkg = package_store.get(name)
+    if not pkg:
+        raise HTTPException(status_code=404, detail=f"Organism '{name}' not found")
+
+    body = await request.json()
+    feedback = body.get("feedback", "")
+    rating = body.get("rating", 0)
+
+    reflection_content = f"# 反馈反思\n\n"
+    reflection_content += f"时间: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+    reflection_content += f"反馈类型: {'👍 好评' if rating > 0 else '👎 差评' if rating < 0 else '文字反馈'}\n\n"
+    if feedback:
+        reflection_content += f"反馈内容: {feedback}\n\n"
+    reflection_content += f"触发反思: 请分析这次反馈，考虑是否需要更新DNA。\n"
+
+    pkg.add_reflection(reflection_content)
+
+    return {"status": "ok", "message": "Feedback recorded"}
 
 
 # ── Static files ───────────────────────────────────────────

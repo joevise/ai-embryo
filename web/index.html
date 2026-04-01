@@ -1072,6 +1072,7 @@ textarea.input{resize:vertical;min-height:100px;line-height:1.6}
         <button class="btn btn-primary btn-sm" onclick="toggleChat()">💬 Chat</button>
         <button class="btn btn-secondary btn-sm" onclick="startCrossoverMode()">🧬 Crossover</button>
         <button class="btn btn-secondary btn-sm" onclick="doMutate()">🔀 Mutate</button>
+        <button class="btn btn-secondary btn-sm" onclick="openDnaEditor()">✏️ Edit DNA</button>
         <button class="btn btn-secondary btn-sm" onclick="doDelete()" style="color:var(--error)">🗑️ Delete</button>
       </div>
     </div>
@@ -1084,6 +1085,13 @@ textarea.input{resize:vertical;min-height:100px;line-height:1.6}
       <div class="chat-input-row">
         <input class="input" id="chat-input" placeholder="Send a message..." onkeydown="if(event.key==='Enter')sendChat()">
         <button class="btn btn-primary btn-sm" onclick="sendChat()">Send</button>
+      </div>
+      <div class="chat-feedback" style="margin-top:10px;display:flex;gap:8px;align-items:center">
+        <span style="font-size:11px;color:var(--text3);font-family:var(--mono)">反馈:</span>
+        <button class="btn-icon" onclick="submitChatFeedback(1)" title="Good">👍</button>
+        <button class="btn-icon" onclick="submitChatFeedback(-1)" title="Bad">👎</button>
+        <input class="input" id="chat-feedback-input" placeholder="Optional feedback..." style="flex:1;font-size:12px;padding:6px 10px">
+        <button class="btn btn-secondary btn-sm" onclick="submitChatFeedback(0)">Send</button>
       </div>
     </div>
   </div>
@@ -1337,6 +1345,28 @@ textarea.input{resize:vertical;min-height:100px;line-height:1.6}
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('evolve-modal')">Cancel</button>
       <button class="btn btn-primary" id="evolve-start-btn" onclick="startEvolve()">Start</button>
+    </div>
+  </div>
+</div>
+
+<!-- DNA EDITOR MODAL -->
+<div class="modal-overlay" id="dna-editor-modal">
+  <div class="modal" style="max-width:700px">
+    <div class="modal-header">
+      <div class="modal-title">Edit DNA — <span id="dna-editor-name"></span></div>
+      <button class="modal-close" onclick="closeDnaEditor()">✕</button>
+    </div>
+    <div class="dna-tabs" style="display:flex;gap:4px;margin-bottom:16px">
+      <button class="btn btn-sm" id="dna-tab-soul" onclick="switchDnaTab('soul')" style="background:var(--bg3)">SOUL</button>
+      <button class="btn btn-sm" id="dna-tab-mind" onclick="switchDnaTab('mind')">MIND</button>
+      <button class="btn btn-sm" id="dna-tab-values" onclick="switchDnaTab('values')">VALUES</button>
+    </div>
+    <div id="dna-editor-content">
+      <textarea class="input" id="dna-editor-textarea" style="min-height:300px;font-family:var(--font);font-size:13px;line-height:1.6" spellcheck="false"></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeDnaEditor()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveDna()">Save Changes</button>
     </div>
   </div>
 </div>
@@ -1671,11 +1701,28 @@ function selectOrganism(o){
     });
   }
 
+  if(o.soul_summary){
+    mc.innerHTML+=`<div class="mind-card" style="flex-basis:100%"><div class="mind-card-label">SOUL</div><div class="mind-card-value" style="font-size:12px;max-height:60px;overflow:hidden">${esc(o.soul_summary.substring(0,100))}...</div></div>`;
+  }
+  if(o.mind_summary){
+    mc.innerHTML+=`<div class="mind-card" style="flex-basis:100%"><div class="mind-card-label">MIND</div><div class="mind-card-value" style="font-size:12px;max-height:60px;overflow:hidden">${esc(o.mind_summary.substring(0,100))}...</div></div>`;
+  }
+  if(o.values_summary){
+    mc.innerHTML+=`<div class="mind-card" style="flex-basis:100%"><div class="mind-card-label">VALUES</div><div class="mind-card-value" style="font-size:12px;max-height:60px;overflow:hidden">${esc(o.values_summary.substring(0,100))}...</div></div>`;
+  }
+
   const tp=document.getElementById('det-traits');tp.innerHTML='';
   (o.traits||[]).forEach(t=>{
     const cls = t.type==='tool'?'tool':t.type==='skill'?'skill':t.type==='discovery'?'discovery':'prompt';
     tp.innerHTML+=`<span class="trait-pill ${cls}">${t.type||''}:${t.value||t.category||''}</span>`;
   });
+
+  if(o.skills_count > 0){
+    tp.innerHTML+=`<span class="trait-pill skill">${o.skills_count} skills</span>`;
+  }
+  if(o.memory_episodes_count > 0){
+    tp.innerHTML+=`<span class="trait-pill prompt">${o.memory_episodes_count} memories</span>`;
+  }
 
   const toolSection = document.getElementById('det-tools-section');
   const toolList = document.getElementById('det-tools');
@@ -1694,6 +1741,13 @@ function selectOrganism(o){
     });
   } else {
     toolSection.style.display='none';
+  }
+
+  if(o.parent_a || o.parent_b){
+    const lineageEl=document.getElementById('det-lineage');
+    if(lineageEl){
+      lineageEl.innerHTML=`${o.parent_a||'?'} × ${o.parent_b||'?'}`;
+    }
   }
 
   if(!chatHistory.has(o.name)) chatHistory.set(o.name,[]);
@@ -1730,6 +1784,14 @@ async function sendChat(){
   chatHistory.get(selectedOrg.name).push({from:'ai',msg:reply});
   box.innerHTML+=`<div class="chat-msg ai">${esc(reply)}</div>`;
   box.scrollTop=box.scrollHeight;
+}
+async function submitChatFeedback(rating){
+  if(!selectedOrg) return;
+  const inp=document.getElementById('chat-feedback-input');
+  const feedback=inp.value.trim();inp.value='';
+  if(rating===0 && !feedback) return;
+  await apiFetch('/organisms/'+selectedOrg.name+'/feedback',{method:'POST',body:JSON.stringify({rating,feedback})});
+  toast('Thanks for your feedback!','success');
 }
 function mockReply(m){
   const replies=["Interesting perspective. Let me analyze that.","I see the pattern here.","Based on my traits, I'd approach this differently.","That's a good question."];
@@ -2382,6 +2444,75 @@ async function saveEvoDefaults(){
   }};
   const res=await apiFetch('/config',{method:'POST',body:JSON.stringify(cfg)});
   toast(res?'Defaults saved!':'Saved locally','success');
+}
+
+// ── DNA EDITOR ──
+let currentDnaTab = 'soul';
+let dnaEditorData = { soul: '', mind: '', values: '' };
+
+async function openDnaEditor(){
+  if(!selectedOrg){toast('Select an organism first','info');return;}
+  document.getElementById('dna-editor-name').textContent = selectedOrg.name;
+  
+  try {
+    const soulRes = await apiFetch('/organisms/'+selectedOrg.name+'/soul');
+    const mindRes = await apiFetch('/organisms/'+selectedOrg.name+'/mind');
+    const valuesRes = await apiFetch('/organisms/'+selectedOrg.name+'/values');
+    
+    dnaEditorData = {
+      soul: soulRes?.soul || '',
+      mind: mindRes?.mind || '',
+      values: valuesRes?.values || ''
+    };
+  } catch(e){
+    dnaEditorData = { soul: selectedOrg.soul_summary || '', mind: selectedOrg.mind_summary || '', values: selectedOrg.values_summary || '' };
+  }
+  
+  currentDnaTab = 'soul';
+  updateDnaEditorTab();
+  document.getElementById('dna-editor-textarea').value = dnaEditorData.soul;
+  document.getElementById('dna-editor-modal').classList.add('open');
+}
+
+function closeDnaEditor(){
+  document.getElementById('dna-editor-modal').classList.remove('open');
+}
+
+function switchDnaTab(tab){
+  if(dnaEditorData[currentDnaTab] !== document.getElementById('dna-editor-textarea').value){
+    dnaEditorData[currentDnaTab] = document.getElementById('dna-editor-textarea').value;
+  }
+  
+  currentDnaTab = tab;
+  updateDnaEditorTab();
+  document.getElementById('dna-editor-textarea').value = dnaEditorData[tab];
+}
+
+function updateDnaEditorTab(){
+  document.querySelectorAll('.dna-tabs .btn').forEach(b=>b.style.background='var(--bg)');
+  document.getElementById('dna-tab-'+currentDnaTab).style.background='var(--text)';
+  document.getElementById('dna-tab-'+currentDnaTab).style.color='#fff';
+}
+
+async function saveDna(){
+  if(!selectedOrg) return;
+  
+  const content = document.getElementById('dna-editor-textarea').value;
+  dnaEditorData[currentDnaTab] = content;
+  
+  try {
+    if(currentDnaTab === 'soul'){
+      await apiFetch('/organisms/'+selectedOrg.name+'/soul',{method:'PUT',body:JSON.stringify({soul:content})});
+    } else if(currentDnaTab === 'mind'){
+      await apiFetch('/organisms/'+selectedOrg.name+'/mind',{method:'PUT',body:JSON.stringify({mind:content})});
+    } else if(currentDnaTab === 'values'){
+      await apiFetch('/organisms/'+selectedOrg.name+'/values',{method:'PUT',body:JSON.stringify({values:content})});
+    }
+    toast('DNA saved!','success');
+    closeDnaEditor();
+  } catch(e){
+    toast('Failed to save DNA','error');
+  }
 }
 
 // ── MODAL ──

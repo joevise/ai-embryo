@@ -30,3 +30,4 @@ memory_db/
 
 # Test artifacts
 /tmp/
+data/organisms/
