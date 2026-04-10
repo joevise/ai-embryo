@@ -2602,17 +2602,25 @@ async function submitEvoInstruct(){
       const shortSummary = summary.length > 100 ? summary.substring(0,100)+'...' : summary;
       
       const resultEl = document.getElementById('evo-instruct-result');
-      resultEl.innerHTML = `<div class="evo-instruct-result">🧬 进化完成：变更了 ${changedParts || '某些内容'}，${shortSummary}</div>`;
+      if(changedParts){
+        resultEl.innerHTML = `<div class="evo-instruct-result">🧬 进化完成：变更了 ${changedParts}。${shortSummary}</div>`;
+      } else {
+        resultEl.innerHTML = `<div class="evo-instruct-result" style="background:#FEF3C7;border-color:#FDE68A;color:#92400E">💡 ${shortSummary || '指令已理解，但无需修改DNA'}</div>`;
+      }
       resultEl.style.display = 'block';
       
       setTimeout(()=>{
         const inner = resultEl.querySelector('.evo-instruct-result');
         if(inner) inner.classList.add('fade-out');
-        setTimeout(()=>{resultEl.style.display='none';resultEl.innerHTML='';},1000);
-      },3000);
+        setTimeout(()=>{resultEl.style.display='none';resultEl.innerHTML='';},4000);
+      },5000);
       
-      toast('进化完成！','success');
-      await loadDnaPanel();
+      if(changedParts){
+        toast('进化完成！','success');
+        await loadDnaPanel();
+      } else {
+        toast('指令已理解','info');
+      }
       await loadGrowthPulse();
     } else {
       toast('进化指令失败','error');

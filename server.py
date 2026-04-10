@@ -1034,9 +1034,7 @@ async def instruct_organism(name: str, request: Request):
         raise HTTPException(status_code=400, detail="instruction is required")
 
     try:
-        print(f"[instruct] Using engine: {type(evolution_engine).__name__}")
         result = await evolution_engine.instruct(pkg, instruction)
-        print(f"[instruct] Result: {result}")
         if result:
             changes = {}
             if result.get("soul_update"):
