@@ -8,10 +8,29 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from typing import Any
 
 from .organism_package import OrganismPackage
+
+
+def _strip_think_tags(text: str) -> str:
+    """Strip <think>...</think> tags from LLM output (e.g. MiniMax thinking models)."""
+    return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+
+
+def _parse_llm_json(text: str) -> dict:
+    """Parse JSON from LLM output, handling think tags and code blocks."""
+    text = _strip_think_tags(text)
+    text = text.strip()
+    # Strip markdown code blocks
+    if text.startswith("```"):
+        text = text.split("```")[1]
+        if text.startswith("json"):
+            text = text[4:]
+        text = text.strip()
+    return json.loads(text)
 
 
 class LLMEvolutionEngine:
@@ -96,14 +115,7 @@ class LLMEvolutionEngine:
             )
             result_text = response.choices[0].message.content or "{}"
 
-            result_text = result_text.strip()
-            if result_text.startswith("```"):
-                result_text = result_text.split("```")[1]
-                if result_text.startswith("json"):
-                    result_text = result_text[4:]
-                result_text = result_text.strip()
-
-            child_data = json.loads(result_text)
+            child_data = _parse_llm_json(result_text)
 
             child_name = child_data.get("name", f"{parent_a.name}x{parent_b.name}")
             child_pkg = OrganismPackage.create(
@@ -199,14 +211,7 @@ class LLMEvolutionEngine:
             )
             result_text = response.choices[0].message.content or "{}"
 
-            result_text = result_text.strip()
-            if result_text.startswith("```"):
-                result_text = result_text.split("```")[1]
-                if result_text.startswith("json"):
-                    result_text = result_text[4:]
-                result_text = result_text.strip()
-
-            return json.loads(result_text)
+            return _parse_llm_json(result_text)
 
         except Exception as e:
             print(f"LLM Mutate error: {e}")
@@ -257,14 +262,7 @@ class LLMEvolutionEngine:
             )
             result_text = response.choices[0].message.content or "{}"
 
-            result_text = result_text.strip()
-            if result_text.startswith("```"):
-                result_text = result_text.split("```")[1]
-                if result_text.startswith("json"):
-                    result_text = result_text[4:]
-                result_text = result_text.strip()
-
-            return json.loads(result_text)
+            return _parse_llm_json(result_text)
 
         except Exception as e:
             print(f"LLM Instruct error: {e}")
@@ -319,14 +317,7 @@ class LLMEvolutionEngine:
             )
             result_text = response.choices[0].message.content or "{}"
 
-            result_text = result_text.strip()
-            if result_text.startswith("```"):
-                result_text = result_text.split("```")[1]
-                if result_text.startswith("json"):
-                    result_text = result_text[4:]
-                result_text = result_text.strip()
-
-            return json.loads(result_text)
+            return _parse_llm_json(result_text)
 
         except Exception as e:
             print(f"LLM Reflect error: {e}")
