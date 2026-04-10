@@ -255,7 +255,7 @@ textarea.input{resize:vertical;min-height:100px;line-height:1.6}
   position:fixed;
   right:0;
   top:56px;
-  width:400px;
+  width:480px;
   height:calc(100vh - 56px);
   overflow-y:auto;
   background:var(--bg);
@@ -392,6 +392,54 @@ textarea.input{resize:vertical;min-height:100px;line-height:1.6}
 .status-dot{width:6px;height:6px;border-radius:50%}
 .status-dot.on{background:var(--success)}
 .status-dot.off{background:var(--text3)}
+
+/* ── DNA TABS ── */
+.dna-tabs{display:flex;gap:4px;margin-bottom:12px}
+.dna-tab-btn{
+  flex:1;padding:8px 12px;border-radius:var(--radius-sm);font-family:var(--font);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;background:var(--bg2);border:1px solid var(--border);color:var(--text2);transition:all .15s;
+}
+.dna-tab-btn:hover{border-color:var(--text)}
+.dna-tab-btn.active{background:var(--text);color:#fff;border-color:var(--text)}
+.dna-content{display:none}
+.dna-content.active{display:block}
+.dna-display{
+  background:var(--code-bg);color:var(--code-text);font-family:var(--font);font-size:12px;line-height:1.6;padding:12px;border-radius:var(--radius-sm);white-space:pre-wrap;word-break:break-word;max-height:200px;overflow-y:auto;margin-bottom:8px;
+}
+.dna-edit-row{display:flex;gap:8px}
+.dna-textarea{
+  width:100%;min-height:150px;max-height:400px;background:var(--code-bg);color:var(--code-text);font-family:var(--font);font-size:12px;line-height:1.6;padding:12px;border-radius:var(--radius-sm);border:1px solid var(--accent);resize:vertical;
+}
+
+/* ── EVOLUTION INSTRUCTION ── */
+.evo-instruct-box{margin-top:16px}
+.evo-instruct-row{display:flex;gap:8px}
+.evo-instruct-result{
+  margin-top:10px;padding:12px 16px;background:#D1FAE5;border:1px solid #A7F3D0;border-radius:var(--radius-sm);font-size:13px;line-height:1.5;color:#065F46;
+}
+.evo-instruct-result.fade-out{transition:opacity 1s;opacity:0}
+
+/* ── GROWTH PULSE ── */
+.growth-pulse{margin-top:16px}
+.growth-pulse-timeline{display:flex;flex-direction:column;gap:0;margin-top:8px}
+.growth-pulse-entry{
+  display:flex;gap:12px;padding:8px 0;position:relative;
+}
+.growth-pulse-entry::before{
+  content:'';position:absolute;left:5px;top:20px;bottom:-8px;width:2px;background:var(--border);
+}
+.growth-pulse-entry:last-child::before{display:none}
+.growth-pulse-dot{
+  width:12px;height:12px;border-radius:50%;background:var(--success);border:2px solid var(--bg);flex-shrink:0;z-index:1;margin-top:4px;
+}
+.growth-pulse-entry.instruct .growth-pulse-dot{background:var(--accent)}
+.growth-pulse-time{font-size:10px;color:var(--text3);font-family:var(--font);margin-bottom:2px}
+.growth-pulse-label{font-size:10px;font-family:var(--font);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text2)}
+.growth-pulse-desc{font-size:12px;color:var(--text);margin-top:2px;line-height:1.4}
+
+/* ── CHAT EVOLUTION SIGNAL ── */
+.chat-msg.evolution{
+  background:#D1FAE5;color:#065F46;border:1px solid #A7F3D0;align-self:center;text-align:center;font-family:var(--font);font-size:12px;padding:10px 16px;max-width:90%;
+}
 
 /* ── CHAT ── */
 .chat-box{
@@ -1027,7 +1075,6 @@ textarea.input{resize:vertical;min-height:100px;line-height:1.6}
     <button class="btn btn-primary btn-sm" onclick="openWizard()">+ Create</button>
     <button class="btn btn-secondary btn-sm" onclick="handleCrossoverBtn()">Crossover</button>
     <button class="btn btn-secondary btn-sm" onclick="openEvolveModal()">Evolve</button>
-    <button class="btn btn-secondary btn-sm" onclick="handleChatBtn()" id="chat-toggle-btn">Chat</button>
   </div>
   <div id="detail-panel" class="detail-panel">
     <div class="detail-header">
@@ -1049,34 +1096,91 @@ textarea.input{resize:vertical;min-height:100px;line-height:1.6}
         </div>
       </div>
     </div>
-    <div class="detail-section">
-      <div class="detail-section-title">Mind</div>
-      <div class="mind-cards" id="det-mind"></div>
+
+    <div class="detail-section" id="dna-section">
+      <div class="detail-section-title">DNA</div>
+      <div class="dna-tabs">
+        <button class="dna-tab-btn active" id="dna-tab-btn-soul" onclick="switchDnaPanelTab('soul')">SOUL</button>
+        <button class="dna-tab-btn" id="dna-tab-btn-mind" onclick="switchDnaPanelTab('mind')">MIND</button>
+        <button class="dna-tab-btn" id="dna-tab-btn-values" onclick="switchDnaPanelTab('values')">VALUES</button>
+      </div>
+      <div class="dna-content active" id="dna-content-soul">
+        <div class="dna-display" id="dna-display-soul">Loading...</div>
+        <div class="dna-edit-row" id="dna-edit-row-soul" style="display:none">
+          <textarea class="dna-textarea" id="dna-textarea-soul"></textarea>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <button class="btn btn-primary btn-sm" onclick="saveDnaPanel('soul')">Save</button>
+            <button class="btn btn-secondary btn-sm" onclick="cancelDnaEdit('soul')">Cancel</button>
+          </div>
+        </div>
+        <button class="btn btn-secondary btn-sm" id="dna-edit-btn-soul" onclick="startDnaEdit('soul')" style="margin-top:8px">Edit</button>
+      </div>
+      <div class="dna-content" id="dna-content-mind">
+        <div class="dna-display" id="dna-display-mind">Loading...</div>
+        <div class="dna-edit-row" id="dna-edit-row-mind" style="display:none">
+          <textarea class="dna-textarea" id="dna-textarea-mind"></textarea>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <button class="btn btn-primary btn-sm" onclick="saveDnaPanel('mind')">Save</button>
+            <button class="btn btn-secondary btn-sm" onclick="cancelDnaEdit('mind')">Cancel</button>
+          </div>
+        </div>
+        <button class="btn btn-secondary btn-sm" id="dna-edit-btn-mind" onclick="startDnaEdit('mind')" style="margin-top:8px">Edit</button>
+      </div>
+      <div class="dna-content" id="dna-content-values">
+        <div class="dna-display" id="dna-display-values">Loading...</div>
+        <div class="dna-edit-row" id="dna-edit-row-values" style="display:none">
+          <textarea class="dna-textarea" id="dna-textarea-values"></textarea>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <button class="btn btn-primary btn-sm" onclick="saveDnaPanel('values')">Save</button>
+            <button class="btn btn-secondary btn-sm" onclick="cancelDnaEdit('values')">Cancel</button>
+          </div>
+        </div>
+        <button class="btn btn-secondary btn-sm" id="dna-edit-btn-values" onclick="startDnaEdit('values')" style="margin-top:8px">Edit</button>
+      </div>
     </div>
+
+    <div class="detail-section evo-instruct-box">
+      <div class="detail-section-title">Evolution Instruction</div>
+      <div class="evo-instruct-row">
+        <input class="input" id="evo-instruct-input" placeholder="告诉它怎么进化... 例如：变得更犀利一点" style="flex:1">
+        <button class="btn btn-accent btn-sm" id="evo-instruct-btn" onclick="submitEvoInstruct()">进化</button>
+      </div>
+      <div id="evo-instruct-result" style="display:none"></div>
+    </div>
+
+    <div class="detail-section growth-pulse" id="growth-pulse-section">
+      <div class="detail-section-title">Growth Pulse</div>
+      <div class="growth-pulse-timeline" id="growth-pulse-timeline">
+        <span style="font-size:12px;color:var(--text3)">Loading...</span>
+      </div>
+    </div>
+
     <div class="detail-section">
       <div class="detail-section-title">Traits</div>
       <div class="trait-pills" id="det-traits"></div>
     </div>
+
     <div class="detail-section" id="det-tools-section" style="display:none">
       <div class="detail-section-title">Equipped Tools</div>
       <div class="tool-list" id="det-tools"></div>
     </div>
+
     <div class="detail-section" id="crossover-hint" style="display:none">
       <div style="padding:12px;background:#FFF8E1;border:1px solid #FF6B35;border-radius:var(--radius-sm);text-align:center;font-size:13px;color:var(--text)">
         选择配对对象...
       </div>
     </div>
+
     <div class="detail-section">
       <div class="detail-section-title">Actions</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-primary btn-sm" onclick="toggleChat()">💬 Chat</button>
         <button class="btn btn-secondary btn-sm" onclick="startCrossoverMode()">🧬 Crossover</button>
         <button class="btn btn-secondary btn-sm" onclick="doMutate()">🔀 Mutate</button>
-        <button class="btn btn-secondary btn-sm" onclick="openDnaEditor()">✏️ Edit DNA</button>
         <button class="btn btn-secondary btn-sm" onclick="doDelete()" style="color:var(--error)">🗑️ Delete</button>
       </div>
     </div>
-    <div class="chat-box" id="chat-section" style="display:none">
+
+    <div class="chat-box" id="chat-section">
       <div class="chat-header">
         <div class="detail-section-title" style="margin:0">Chat</div>
         <div class="chat-powered" id="chat-powered">Powered by <span id="chat-model-name">—</span></div>
@@ -1085,13 +1189,6 @@ textarea.input{resize:vertical;min-height:100px;line-height:1.6}
       <div class="chat-input-row">
         <input class="input" id="chat-input" placeholder="Send a message..." onkeydown="if(event.key==='Enter')sendChat()">
         <button class="btn btn-primary btn-sm" onclick="sendChat()">Send</button>
-      </div>
-      <div class="chat-feedback" style="margin-top:10px;display:flex;gap:8px;align-items:center">
-        <span style="font-size:11px;color:var(--text3);font-family:var(--mono)">反馈:</span>
-        <button class="btn-icon" onclick="submitChatFeedback(1)" title="Good">👍</button>
-        <button class="btn-icon" onclick="submitChatFeedback(-1)" title="Bad">👎</button>
-        <input class="input" id="chat-feedback-input" placeholder="Optional feedback..." style="flex:1;font-size:12px;padding:6px 10px">
-        <button class="btn btn-secondary btn-sm" onclick="submitChatFeedback(0)">Send</button>
       </div>
     </div>
   </div>
@@ -1345,28 +1442,6 @@ textarea.input{resize:vertical;min-height:100px;line-height:1.6}
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('evolve-modal')">Cancel</button>
       <button class="btn btn-primary" id="evolve-start-btn" onclick="startEvolve()">Start</button>
-    </div>
-  </div>
-</div>
-
-<!-- DNA EDITOR MODAL -->
-<div class="modal-overlay" id="dna-editor-modal">
-  <div class="modal" style="max-width:700px">
-    <div class="modal-header">
-      <div class="modal-title">Edit DNA — <span id="dna-editor-name"></span></div>
-      <button class="modal-close" onclick="closeDnaEditor()">✕</button>
-    </div>
-    <div class="dna-tabs" style="display:flex;gap:4px;margin-bottom:16px">
-      <button class="btn btn-sm" id="dna-tab-soul" onclick="switchDnaTab('soul')" style="background:var(--bg3)">SOUL</button>
-      <button class="btn btn-sm" id="dna-tab-mind" onclick="switchDnaTab('mind')">MIND</button>
-      <button class="btn btn-sm" id="dna-tab-values" onclick="switchDnaTab('values')">VALUES</button>
-    </div>
-    <div id="dna-editor-content">
-      <textarea class="input" id="dna-editor-textarea" style="min-height:300px;font-family:var(--font);font-size:13px;line-height:1.6" spellcheck="false"></textarea>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeDnaEditor()">Cancel</button>
-      <button class="btn btn-primary" onclick="saveDna()">Save Changes</button>
     </div>
   </div>
 </div>
@@ -1693,23 +1768,8 @@ function selectOrganism(o){
     statusText.textContent='Demo';
   }
 
-  const mc=document.getElementById('det-mind');mc.innerHTML='';
-  if(o.mind){
-    Object.entries(o.mind).forEach(([k,v])=>{
-      const val=typeof v==='object'?Object.values(v)[0]:v;
-      mc.innerHTML+=`<div class="mind-card"><div class="mind-card-label">${k}</div><div class="mind-card-value">${val}</div></div>`;
-    });
-  }
-
-  if(o.soul_summary){
-    mc.innerHTML+=`<div class="mind-card" style="flex-basis:100%"><div class="mind-card-label">SOUL</div><div class="mind-card-value" style="font-size:12px;max-height:60px;overflow:hidden">${esc(o.soul_summary.substring(0,100))}...</div></div>`;
-  }
-  if(o.mind_summary){
-    mc.innerHTML+=`<div class="mind-card" style="flex-basis:100%"><div class="mind-card-label">MIND</div><div class="mind-card-value" style="font-size:12px;max-height:60px;overflow:hidden">${esc(o.mind_summary.substring(0,100))}...</div></div>`;
-  }
-  if(o.values_summary){
-    mc.innerHTML+=`<div class="mind-card" style="flex-basis:100%"><div class="mind-card-label">VALUES</div><div class="mind-card-value" style="font-size:12px;max-height:60px;overflow:hidden">${esc(o.values_summary.substring(0,100))}...</div></div>`;
-  }
+  loadDnaPanel();
+  loadGrowthPulse();
 
   const tp=document.getElementById('det-traits');tp.innerHTML='';
   (o.traits||[]).forEach(t=>{
@@ -1743,19 +1803,11 @@ function selectOrganism(o){
     toolSection.style.display='none';
   }
 
-  if(o.parent_a || o.parent_b){
-    const lineageEl=document.getElementById('det-lineage');
-    if(lineageEl){
-      lineageEl.innerHTML=`${o.parent_a||'?'} × ${o.parent_b||'?'}`;
-    }
-  }
-
   if(!chatHistory.has(o.name)) chatHistory.set(o.name,[]);
   const hist=chatHistory.get(o.name);
   const box=document.getElementById('chat-messages');
   box.innerHTML=hist.map(m=>`<div class="chat-msg ${m.from}">${esc(m.msg)}</div>`).join('');
   box.scrollTop=box.scrollHeight;
-  document.getElementById('chat-section').style.display='none';
 }
 
 function deselectOrganism(){
@@ -1765,11 +1817,6 @@ function deselectOrganism(){
 }
 
 // ── CHAT ──
-function toggleChat(){
-  if(!selectedOrg){toast('Select an organism first','info');return;}
-  const cs=document.getElementById('chat-section');
-  cs.style.display=cs.style.display==='none'?'block':'none';
-}
 async function sendChat(){
   if(!selectedOrg) return;
   const inp=document.getElementById('chat-input');
@@ -1783,6 +1830,14 @@ async function sendChat(){
   const reply=res?.response||res?.reply||mockReply(msg);
   chatHistory.get(selectedOrg.name).push({from:'ai',msg:reply});
   box.innerHTML+=`<div class="chat-msg ai">${esc(reply)}</div>`;
+  
+  if(res?.evolution_signal?.triggered){
+    const delta = res.evolution_signal.fitness_delta || 0;
+    const sign = delta > 0 ? '+' : '';
+    box.innerHTML+=`<div class="chat-msg evolution">🧬 ${res.evolution_signal.summary || '成长信号'} (fitness ${sign}${delta.toFixed(2)})</div>`;
+    setTimeout(()=>loadGrowthPulse(),500);
+  }
+  
   box.scrollTop=box.scrollHeight;
 }
 async function submitChatFeedback(rating){
@@ -2244,11 +2299,6 @@ function handleCrossoverBtn(){
   doCrossover();
 }
 
-function handleChatBtn(){
-  if(!selectedOrg){toast('请先选中一个生命体','info');return;}
-  toggleChat();
-}
-
 // ── MUTATE ──
 async function doMutate(){
   if(!selectedOrg){toast('请先选中一个生命体','info');return;}
@@ -2446,72 +2496,160 @@ async function saveEvoDefaults(){
   toast(res?'Defaults saved!':'Saved locally','success');
 }
 
-// ── DNA EDITOR ──
-let currentDnaTab = 'soul';
-let dnaEditorData = { soul: '', mind: '', values: '' };
+// ── DNA PANEL (INLINE EDITING) ──
+let currentDnaPanelTab = 'soul';
+let dnaPanelData = { soul: '', mind: '', values: '' };
+let dnaPanelOriginal = { soul: '', mind: '', values: '' };
 
-async function openDnaEditor(){
-  if(!selectedOrg){toast('Select an organism first','info');return;}
-  document.getElementById('dna-editor-name').textContent = selectedOrg.name;
-  
-  try {
-    const soulRes = await apiFetch('/organisms/'+selectedOrg.name+'/soul');
-    const mindRes = await apiFetch('/organisms/'+selectedOrg.name+'/mind');
-    const valuesRes = await apiFetch('/organisms/'+selectedOrg.name+'/values');
-    
-    dnaEditorData = {
-      soul: soulRes?.soul || '',
-      mind: mindRes?.mind || '',
-      values: valuesRes?.values || ''
-    };
-  } catch(e){
-    dnaEditorData = { soul: selectedOrg.soul_summary || '', mind: selectedOrg.mind_summary || '', values: selectedOrg.values_summary || '' };
-  }
-  
-  currentDnaTab = 'soul';
-  updateDnaEditorTab();
-  document.getElementById('dna-editor-textarea').value = dnaEditorData.soul;
-  document.getElementById('dna-editor-modal').classList.add('open');
+function switchDnaPanelTab(tab){
+  currentDnaPanelTab = tab;
+  document.querySelectorAll('.dna-tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('dna-tab-btn-'+tab).classList.add('active');
+  document.querySelectorAll('.dna-content').forEach(c=>c.classList.remove('active'));
+  document.getElementById('dna-content-'+tab).classList.add('active');
 }
 
-function closeDnaEditor(){
-  document.getElementById('dna-editor-modal').classList.remove('open');
+function startDnaEdit(tab){
+  dnaPanelOriginal[tab] = dnaPanelData[tab];
+  document.getElementById('dna-display-'+tab).style.display='none';
+  document.getElementById('dna-edit-btn-'+tab).style.display='none';
+  document.getElementById('dna-edit-row-'+tab).style.display='flex';
+  document.getElementById('dna-textarea-'+tab).value = dnaPanelData[tab];
 }
 
-function switchDnaTab(tab){
-  if(dnaEditorData[currentDnaTab] !== document.getElementById('dna-editor-textarea').value){
-    dnaEditorData[currentDnaTab] = document.getElementById('dna-editor-textarea').value;
-  }
-  
-  currentDnaTab = tab;
-  updateDnaEditorTab();
-  document.getElementById('dna-editor-textarea').value = dnaEditorData[tab];
+function cancelDnaEdit(tab){
+  document.getElementById('dna-display-'+tab).style.display='block';
+  document.getElementById('dna-edit-btn-'+tab).style.display='inline-flex';
+  document.getElementById('dna-edit-row-'+tab).style.display='none';
+  document.getElementById('dna-textarea-'+tab).value = dnaPanelOriginal[tab];
 }
 
-function updateDnaEditorTab(){
-  document.querySelectorAll('.dna-tabs .btn').forEach(b=>b.style.background='var(--bg)');
-  document.getElementById('dna-tab-'+currentDnaTab).style.background='var(--text)';
-  document.getElementById('dna-tab-'+currentDnaTab).style.color='#fff';
-}
-
-async function saveDna(){
+async function saveDnaPanel(tab){
   if(!selectedOrg) return;
-  
-  const content = document.getElementById('dna-editor-textarea').value;
-  dnaEditorData[currentDnaTab] = content;
-  
+  const content = document.getElementById('dna-textarea-'+tab).value;
   try {
-    if(currentDnaTab === 'soul'){
-      await apiFetch('/organisms/'+selectedOrg.name+'/soul',{method:'PUT',body:JSON.stringify({soul:content})});
-    } else if(currentDnaTab === 'mind'){
-      await apiFetch('/organisms/'+selectedOrg.name+'/mind',{method:'PUT',body:JSON.stringify({mind:content})});
-    } else if(currentDnaTab === 'values'){
-      await apiFetch('/organisms/'+selectedOrg.name+'/values',{method:'PUT',body:JSON.stringify({values:content})});
+    const res = await apiFetch('/organisms/'+selectedOrg.name+'/'+tab,{method:'PUT',body:JSON.stringify({[tab]:content})});
+    if(res){
+      dnaPanelData[tab] = content;
+      document.getElementById('dna-display-'+tab).textContent = content || '(empty)';
+      document.getElementById('dna-display-'+tab).style.display='block';
+      document.getElementById('dna-edit-btn-'+tab).style.display='inline-flex';
+      document.getElementById('dna-edit-row-'+tab).style.display='none';
+      toast('DNA saved!','success');
+    } else {
+      toast('Failed to save','error');
     }
-    toast('DNA saved!','success');
-    closeDnaEditor();
   } catch(e){
     toast('Failed to save DNA','error');
+  }
+}
+
+async function loadDnaPanel(){
+  if(!selectedOrg) return;
+  try {
+    const [soulRes, mindRes, valuesRes] = await Promise.all([
+      apiFetch('/organisms/'+selectedOrg.name+'/soul'),
+      apiFetch('/organisms/'+selectedOrg.name+'/mind'),
+      apiFetch('/organisms/'+selectedOrg.name+'/values')
+    ]);
+    dnaPanelData = {
+      soul: soulRes?.soul || soulRes?.content || selectedOrg.soul_summary || '(no soul data)',
+      mind: mindRes?.mind || mindRes?.content || selectedOrg.mind_summary || '(no mind data)',
+      values: valuesRes?.values || valuesRes?.content || selectedOrg.values_summary || '(no values data)'
+    };
+  } catch(e){
+    dnaPanelData = {
+      soul: selectedOrg.soul_summary || '(no soul data)',
+      mind: selectedOrg.mind_summary || '(no mind data)',
+      values: selectedOrg.values_summary || '(no values data)'
+    };
+  }
+  dnaPanelOriginal = {...dnaPanelData};
+  ['soul','mind','values'].forEach(tab=>{
+    const display = document.getElementById('dna-display-'+tab);
+    if(display) display.textContent = dnaPanelData[tab];
+    const editRow = document.getElementById('dna-edit-row-'+tab);
+    if(editRow) editRow.style.display='none';
+    const editBtn = document.getElementById('dna-edit-btn-'+tab);
+    if(editBtn) editBtn.style.display='inline-flex';
+    const contentDiv = document.getElementById('dna-content-'+tab);
+    if(contentDiv) contentDiv.querySelector('.dna-display').style.display='block';
+  });
+  switchDnaPanelTab('soul');
+}
+
+// ── EVOLUTION INSTRUCTION ──
+async function submitEvoInstruct(){
+  if(!selectedOrg) return;
+  const input = document.getElementById('evo-instruct-input');
+  const btn = document.getElementById('evo-instruct-btn');
+  const instruction = input.value.trim();
+  if(!instruction) return;
+  
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner" style="width:14px;height:14px;border-width:2px"></span>';
+  
+  try {
+    const res = await apiFetch('/organisms/'+selectedOrg.name+'/instruct',{
+      method:'POST',body:JSON.stringify({instruction})
+    });
+    
+    if(res && res.status === 'ok'){
+      const changes = res.changes || {};
+      const changedParts = Object.keys(changes).join(', ');
+      const summary = res.changes_summary || res.reasoning || '';
+      const shortSummary = summary.length > 100 ? summary.substring(0,100)+'...' : summary;
+      
+      const resultEl = document.getElementById('evo-instruct-result');
+      resultEl.innerHTML = `<div class="evo-instruct-result">🧬 进化完成：变更了 ${changedParts || '某些内容'}，${shortSummary}</div>`;
+      resultEl.style.display = 'block';
+      
+      setTimeout(()=>{
+        const inner = resultEl.querySelector('.evo-instruct-result');
+        if(inner) inner.classList.add('fade-out');
+        setTimeout(()=>{resultEl.style.display='none';resultEl.innerHTML='';},1000);
+      },3000);
+      
+      toast('进化完成！','success');
+      await loadDnaPanel();
+      await loadGrowthPulse();
+    } else {
+      toast('进化指令失败','error');
+    }
+  } catch(e){
+    toast('进化指令失败','error');
+  }
+  
+  btn.disabled = false;
+  btn.textContent = '进化';
+  input.value = '';
+}
+
+// ── GROWTH PULSE ──
+async function loadGrowthPulse(){
+  if(!selectedOrg) return;
+  const timeline = document.getElementById('growth-pulse-timeline');
+  timeline.innerHTML = '<span style="font-size:12px;color:var(--text3)">Loading...</span>';
+  
+  try {
+    const res = await apiFetch('/organisms/'+selectedOrg.name+'/evolution');
+    if(res && res.history && res.history.length > 0){
+      const entries = res.history.slice(0,10);
+      timeline.innerHTML = entries.map(entry => `
+        <div class="growth-pulse-entry ${entry.type || 'reflect'}">
+          <div class="growth-pulse-dot"></div>
+          <div>
+            <div class="growth-pulse-time">${entry.timestamp || entry.time || '—'}</div>
+            <div class="growth-pulse-label">${entry.type === 'instruct' ? '指令' : '反思'}</div>
+            <div class="growth-pulse-desc">${entry.description || entry.summary || entry.reasoning || '—'}</div>
+          </div>
+        </div>
+      `).join('');
+    } else {
+      timeline.innerHTML = '<span style="font-size:12px;color:var(--text3)">No evolution history yet</span>';
+    }
+  } catch(e){
+    timeline.innerHTML = '<span style="font-size:12px;color:var(--text3)">Failed to load history</span>';
   }
 }
 
