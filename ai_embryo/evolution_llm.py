@@ -224,30 +224,28 @@ class LLMEvolutionEngine:
         prompt = f"""你是 "{organism.name}" 的进化指令解析器。
 用户的指令是："{instruction}"
 
-当前生命体 DNA：
-- 灵魂 (SOUL.md): {organism.read_soul()[:800]}
-- 思维 (MIND.md): {organism.read_mind()[:800]}
-- 价值观 (VALUES.md): {organism.read_values()[:800]}
+当前生命体 DNA 摘要：
+- 灵魂 (SOUL.md) 前200字: {organism.read_soul()[:200]}
+- 思维 (MIND.md) 前200字: {organism.read_mind()[:200]}
+- 价值观 (VALUES.md) 前200字: {organism.read_values()[:200]}
 
-请分析用户的指令，决定需要修改哪些 DNA 部分。指令可能要求：
-- 改变性格/说话风格（如"变得更犀利"）
-- 学习新的思维方式（如"用数据分析的思维方式"）
-- 添加新的价值观（如"拥抱不确定性"）
-- 其他任何 DNA 修改
+请分析用户的指令，决定需要修改哪些 DNA 部分。
 
-以 JSON 格式输出：
+重要：不要返回完整文件内容！只返回需要【追加】到对应文件末尾的增量内容。
+
+以 JSON 格式输出（保持简短，总共不超过500字）：
 {{
-  "soul_update": "新的完整 SOUL.md 内容（如果需要修改），否则为空字符串",
-  "mind_update": "新的完整 MIND.md 内容（如果需要修改），否则为空字符串",
-  "values_update": "新的完整 VALUES.md 内容（如果需要修改），否则为空字符串",
-  "reasoning": "为什么这样改，融合逻辑是什么",
+  "soul_append": "要追加到 SOUL.md 末尾的内容（如果需要修改），否则为空字符串",
+  "mind_append": "要追加到 MIND.md 末尾的内容（如果需要修改），否则为空字符串",
+  "values_append": "要追加到 VALUES.md 末尾的内容（如果需要修改），否则为空字符串",
+  "reasoning": "为什么这样改（一句话）",
   "changes_summary": "一句话总结改了什么"
 }}"""
 
         messages = [
             {
                 "role": "system",
-                "content": f"你是 {organism.name} 的进化指令解析专家，擅长理解用户的进化意图并转化为 DNA 修改。",
+                "content": f"你是 {organism.name} 的进化指令解析专家。只输出JSON，不要多余文字。保持简短。",
             }
         ]
         messages.append({"role": "user", "content": prompt})
@@ -258,7 +256,7 @@ class LLMEvolutionEngine:
                 model=self.model,
                 messages=messages,
                 temperature=0.7,
-                max_tokens=4000,
+                max_tokens=2000,
             )
             result_text = response.choices[0].message.content or "{}"
 

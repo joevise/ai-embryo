@@ -1037,15 +1037,32 @@ async def instruct_organism(name: str, request: Request):
         result = await evolution_engine.instruct(pkg, instruction)
         if result:
             changes = {}
-            if result.get("soul_update"):
-                pkg.write_soul(result["soul_update"])
-                changes["soul"] = result["soul_update"]
-            if result.get("mind_update"):
-                pkg.write_mind(result["mind_update"])
-                changes["mind"] = result["mind_update"]
-            if result.get("values_update"):
-                pkg.write_values(result["values_update"])
-                changes["values"] = result["values_update"]
+            if result.get("soul_append"):
+                current = pkg.read_soul()
+                pkg.write_soul(current + f"\n\n# 进化更新\n{result['soul_append']}")
+                changes["soul"] = result["soul_append"]
+            if result.get("mind_append"):
+                current = pkg.read_mind()
+                pkg.write_mind(current + f"\n\n# 进化更新\n{result['mind_append']}")
+                changes["mind"] = result["mind_append"]
+            if result.get("values_append"):
+                current = pkg.read_values()
+                pkg.write_values(current + f"\n\n# 进化更新\n{result['values_append']}")
+                changes["values"] = result["values_append"]
+            # Backward compat: also check old field names
+            if not changes:
+                if result.get("soul_update"):
+                    current = pkg.read_soul()
+                    pkg.write_soul(current + f"\n\n# 进化更新\n{result['soul_update']}")
+                    changes["soul"] = result["soul_update"]
+                if result.get("mind_update"):
+                    current = pkg.read_mind()
+                    pkg.write_mind(current + f"\n\n# 进化更新\n{result['mind_update']}")
+                    changes["mind"] = result["mind_update"]
+                if result.get("values_update"):
+                    current = pkg.read_values()
+                    pkg.write_values(current + f"\n\n# 进化更新\n{result['values_update']}")
+                    changes["values"] = result["values_update"]
 
             if changes:
                 pkg.add_changelog(
