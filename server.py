@@ -1069,7 +1069,7 @@ async def instruct_organism(name: str, request: Request):
 
 def _get_or_create_package(name: str) -> OrganismPackage | None:
     """Get package from store, or auto-create from genome-based organism."""
-    pkg = _get_or_create_package(name)
+    pkg = package_store.get(name)
     if pkg:
         return pkg
     org = organisms_store.get(name)
