@@ -789,7 +789,7 @@ async def chat_with_organism(request: Request):
     name = body.get("name", "")
     message = body.get("message", "")
 
-    pkg = package_store.get(name)
+    pkg = _get_or_create_package(name)
     org = organisms_store.get(name)
 
     if not pkg and not org:
@@ -923,7 +923,7 @@ def list_organisms():
 @app.get("/api/organisms/{name}/package")
 def get_organism_package(name: str):
     """Get full package info for an organism."""
-    pkg = package_store.get(name)
+    pkg = _get_or_create_package(name)
     if not pkg:
         raise HTTPException(status_code=404, detail=f"Organism '{name}' not found")
     return pkg.to_info()
@@ -932,7 +932,7 @@ def get_organism_package(name: str):
 @app.get("/api/organisms/{name}/soul")
 def get_organism_soul(name: str):
     """Get SOUL.md content for an organism."""
-    pkg = package_store.get(name)
+    pkg = _get_or_create_package(name)
     if not pkg:
         raise HTTPException(status_code=404, detail=f"Organism '{name}' not found")
     return {"name": name, "soul": pkg.read_soul()}
@@ -941,7 +941,7 @@ def get_organism_soul(name: str):
 @app.put("/api/organisms/{name}/soul")
 async def update_organism_soul(name: str, request: Request):
     """Update SOUL.md content for an organism."""
-    pkg = package_store.get(name)
+    pkg = _get_or_create_package(name)
     if not pkg:
         raise HTTPException(status_code=404, detail=f"Organism '{name}' not found")
 
@@ -954,7 +954,7 @@ async def update_organism_soul(name: str, request: Request):
 @app.get("/api/organisms/{name}/mind")
 def get_organism_mind(name: str):
     """Get MIND.md content for an organism."""
-    pkg = package_store.get(name)
+    pkg = _get_or_create_package(name)
     if not pkg:
         raise HTTPException(status_code=404, detail=f"Organism '{name}' not found")
     return {"name": name, "mind": pkg.read_mind()}
@@ -963,7 +963,7 @@ def get_organism_mind(name: str):
 @app.put("/api/organisms/{name}/mind")
 async def update_organism_mind(name: str, request: Request):
     """Update MIND.md content for an organism."""
-    pkg = package_store.get(name)
+    pkg = _get_or_create_package(name)
     if not pkg:
         raise HTTPException(status_code=404, detail=f"Organism '{name}' not found")
 
@@ -976,7 +976,7 @@ async def update_organism_mind(name: str, request: Request):
 @app.get("/api/organisms/{name}/values")
 def get_organism_values(name: str):
     """Get VALUES.md content for an organism."""
-    pkg = package_store.get(name)
+    pkg = _get_or_create_package(name)
     if not pkg:
         raise HTTPException(status_code=404, detail=f"Organism '{name}' not found")
     return {"name": name, "values": pkg.read_values()}
@@ -985,7 +985,7 @@ def get_organism_values(name: str):
 @app.put("/api/organisms/{name}/values")
 async def update_organism_values(name: str, request: Request):
     """Update VALUES.md content for an organism."""
-    pkg = package_store.get(name)
+    pkg = _get_or_create_package(name)
     if not pkg:
         raise HTTPException(status_code=404, detail=f"Organism '{name}' not found")
 
@@ -998,7 +998,7 @@ async def update_organism_values(name: str, request: Request):
 @app.post("/api/organisms/{name}/feedback")
 async def submit_feedback(name: str, request: Request):
     """Submit feedback for an organism to trigger reflection and DNA update."""
-    pkg = package_store.get(name)
+    pkg = _get_or_create_package(name)
     if not pkg:
         raise HTTPException(status_code=404, detail=f"Organism '{name}' not found")
 
@@ -1021,7 +1021,7 @@ async def submit_feedback(name: str, request: Request):
 @app.post("/api/organisms/{name}/instruct")
 async def instruct_organism(name: str, request: Request):
     """用户通过自然语言指令让生命体进化"""
-    pkg = package_store.get(name)
+    pkg = _get_or_create_package(name)
     if not pkg:
         raise HTTPException(status_code=404, detail=f"Organism '{name}' not found")
 
@@ -1067,10 +1067,38 @@ async def instruct_organism(name: str, request: Request):
         raise HTTPException(status_code=500, detail=f"Instruct error: {e}")
 
 
+def _get_or_create_package(name: str) -> OrganismPackage | None:
+    """Get package from store, or auto-create from genome-based organism."""
+    pkg = _get_or_create_package(name)
+    if pkg:
+        return pkg
+    org = organisms_store.get(name)
+    if not org:
+        return None
+    pkg = OrganismPackage.create(
+        base_dir=ORGANISMS_DIR / name,
+        name=name,
+        purpose=org.genome.identity.get("purpose", ""),
+        persona_config={"type": "custom"},
+    )
+    try:
+        prompt = org.genome.compile_system_prompt()
+        if prompt:
+            pkg.write_soul(prompt[:2000])
+        mind = org.genome.identity.get("mind", {})
+        if mind:
+            import json as _json
+            pkg.write_mind(f"# 思维系统\n\n```yaml\n{yaml.dump(mind, allow_unicode=True)}```")
+    except Exception:
+        pass
+    package_store[name] = pkg
+    return pkg
+
+
 @app.get("/api/organisms/{name}/evolution")
 def get_organism_evolution(name: str):
     """返回完整进化档案"""
-    pkg = package_store.get(name)
+    pkg = _get_or_create_package(name)
     if not pkg:
         raise HTTPException(status_code=404, detail=f"Organism '{name}' not found")
 

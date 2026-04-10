@@ -1808,6 +1808,7 @@ function selectOrganism(o){
   const box=document.getElementById('chat-messages');
   box.innerHTML=hist.map(m=>`<div class="chat-msg ${m.from}">${esc(m.msg)}</div>`).join('');
   box.scrollTop=box.scrollHeight;
+  document.getElementById('chat-section').style.display='block';
 }
 
 function deselectOrganism(){
