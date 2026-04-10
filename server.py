@@ -359,7 +359,7 @@ def _run_with_real_llm(
 
 async def _trigger_reflection(
     name: str, pkg: OrganismPackage, history: list[dict]
-) -> None:
+) -> dict | None:
     """Trigger reflection for an organism after conversation milestones."""
     try:
         reflection_result = await evolution_engine.reflect(pkg, history)
@@ -370,12 +370,36 @@ async def _trigger_reflection(
                     f"# 定期反思\n\n{memory_update}\n\n自评分数: {reflection_result.get('fitness_self_score', 0.5)}"
                 )
 
+            changes = {}
             mind_updates = reflection_result.get("mind_updates", "")
             if mind_updates:
                 current_mind = pkg.read_mind()
-                pkg.write_mind(current_mind + f"\n\n# 更新\n{mind_updates}")
+                new_mind = current_mind + f"\n\n# 更新\n{mind_updates}"
+                pkg.write_mind(new_mind)
+                changes["mind"] = mind_updates
+
+            soul_updates = reflection_result.get("soul_updates", "")
+            if soul_updates:
+                current_soul = pkg.read_soul()
+                new_soul = current_soul + f"\n\n# 更新\n{soul_updates}"
+                pkg.write_soul(new_soul)
+                changes["soul"] = soul_updates
+
+            fitness_self_score = reflection_result.get("fitness_self_score", 0.5)
+            if fitness_self_score:
+                old_fitness = pkg.fitness
+                pkg.fitness = old_fitness * 0.7 + fitness_self_score * 0.3
+                pkg.save()
+
+            if changes:
+                reasoning = f"反思结果：strengths={reflection_result.get('strengths', '')}, weaknesses={reflection_result.get('weaknesses', '')}"
+                pkg.add_changelog("反思进化", changes, reasoning)
+
+            return reflection_result
+        return None
     except Exception as e:
         print(f"Reflection error for {name}: {e}")
+        return None
 
 
 # ── Config API Routes ──────────────────────────────────────
@@ -775,6 +799,7 @@ async def chat_with_organism(request: Request):
         chat_history[name] = []
 
     history = chat_history[name]
+    evolution_signal = {"triggered": False}
 
     if _has_any_api_key():
         if pkg:
@@ -799,8 +824,17 @@ async def chat_with_organism(request: Request):
         if pkg:
             pkg.update_memory({"user": message, "assistant": resp_text})
 
-            if len(history) >= 10 and len(history) % 5 == 0:
-                asyncio.create_task(_trigger_reflection(name, pkg, history))
+            if len(history) >= 3 and len(history) % 3 == 0:
+                reflection_result = await _trigger_reflection(name, pkg, history)
+                if reflection_result:
+                    evolution_signal = {
+                        "triggered": True,
+                        "summary": f"学会了新知识，自评分数 {reflection_result.get('fitness_self_score', 0.5):.2f}",
+                        "fitness_delta": reflection_result.get(
+                            "fitness_self_score", 0.5
+                        )
+                        - 0.5,
+                    }
 
         if len(history) > 50:
             chat_history[name] = history[-50:]
@@ -814,6 +848,7 @@ async def chat_with_organism(request: Request):
         "status": "ok",
         "response": result.get("response", "..."),
         "meta": result.get("_meta", {}),
+        "evolution_signal": evolution_signal,
     }
 
 
@@ -981,6 +1016,71 @@ async def submit_feedback(name: str, request: Request):
     pkg.add_reflection(reflection_content)
 
     return {"status": "ok", "message": "Feedback recorded"}
+
+
+@app.post("/api/organisms/{name}/instruct")
+async def instruct_organism(name: str, request: Request):
+    """用户通过自然语言指令让生命体进化"""
+    pkg = package_store.get(name)
+    if not pkg:
+        raise HTTPException(status_code=404, detail=f"Organism '{name}' not found")
+
+    body = await request.json()
+    instruction = body.get("instruction", "")
+
+    if not instruction:
+        raise HTTPException(status_code=400, detail="instruction is required")
+
+    try:
+        result = await evolution_engine.instruct(pkg, instruction)
+        if result:
+            changes = {}
+            if result.get("soul_update"):
+                pkg.write_soul(result["soul_update"])
+                changes["soul"] = result["soul_update"]
+            if result.get("mind_update"):
+                pkg.write_mind(result["mind_update"])
+                changes["mind"] = result["mind_update"]
+            if result.get("values_update"):
+                pkg.write_values(result["values_update"])
+                changes["values"] = result["values_update"]
+
+            if changes:
+                pkg.add_changelog(
+                    "指令进化",
+                    changes,
+                    result.get("reasoning", ""),
+                )
+
+            return {
+                "status": "ok",
+                "changes": changes,
+                "reasoning": result.get("reasoning", ""),
+                "changes_summary": result.get("changes_summary", ""),
+            }
+        return {
+            "status": "ok",
+            "changes": {},
+            "reasoning": "No result from evolution engine",
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Instruct error: {e}")
+
+
+@app.get("/api/organisms/{name}/evolution")
+def get_organism_evolution(name: str):
+    """返回完整进化档案"""
+    pkg = package_store.get(name)
+    if not pkg:
+        raise HTTPException(status_code=404, detail=f"Organism '{name}' not found")
+
+    return {
+        "name": name,
+        "changelog": pkg.get_changelog(),
+        "stats": pkg.get_evolution_stats(),
+        "reflections": pkg._memory_reflections,
+        "fitness": pkg.fitness,
+    }
 
 
 # ── Static files ───────────────────────────────────────────

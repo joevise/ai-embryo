@@ -821,6 +821,83 @@ class OrganismPackage:
         with open(memory_file, "w", encoding="utf-8") as f:
             f.write(memory_content)
 
+    def add_changelog(self, change_type: str, changes: dict, reasoning: str) -> None:
+        """记录 DNA 变更历史"""
+        if not self.base_dir:
+            return
+
+        evolution_dir = self.base_dir / "evolution"
+        evolution_dir.mkdir(parents=True, exist_ok=True)
+
+        changelog_file = evolution_dir / "changelog.md"
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())
+
+        entry = f"\n## [{timestamp}] {change_type}\n"
+        for key, value in changes.items():
+            if value:
+                entry += f"- {key}: {value[:200]}{'...' if len(str(value)) > 200 else ''}\n"
+        entry += f"\n原因：{reasoning}\n"
+
+        if changelog_file.exists():
+            existing = changelog_file.read_text(encoding="utf-8")
+            entry = existing + entry
+
+        changelog_file.write_text(entry, encoding="utf-8")
+
+    def get_changelog(self) -> str:
+        """读取 changelog"""
+        if not self.base_dir:
+            return ""
+        changelog_file = self.base_dir / "evolution" / "changelog.md"
+        if changelog_file.exists():
+            return changelog_file.read_text(encoding="utf-8")
+        return ""
+
+    def get_evolution_stats(self) -> dict:
+        """返回进化统计"""
+        stats = {
+            "total_reflections": len(self._memory_reflections),
+            "total_instructions": 0,
+            "fitness": self.fitness,
+            "fitness_history": [],
+            "recent_changes": [],
+        }
+
+        if not self.base_dir:
+            return stats
+
+        changelog_file = self.base_dir / "evolution" / "changelog.md"
+        if changelog_file.exists():
+            changelog_content = changelog_file.read_text(encoding="utf-8")
+            lines = changelog_content.split("\n")
+            instruction_count = sum(1 for line in lines if "指令进化" in line)
+            reflection_count = sum(1 for line in lines if "反思" in line)
+
+            stats["total_instructions"] = instruction_count
+            stats["total_reflections"] = reflection_count
+
+            recent_entries = []
+            current_entry = {}
+            for line in lines:
+                if line.startswith("## ["):
+                    if current_entry:
+                        recent_entries.append(current_entry)
+                    current_entry = {"time": line[4:line.find("]")], "type": line[line.find("]")+2:]}
+                elif line.startswith("原因："):
+                    current_entry["reasoning"] = line[4:]
+            if current_entry:
+                recent_entries.append(current_entry)
+
+            stats["recent_changes"] = recent_entries[-10:] if recent_entries else []
+
+        genome_file = self.base_dir / "GENOME.yaml"
+        if genome_file.exists():
+            with open(genome_file, "r", encoding="utf-8") as f:
+                genome_data = yaml.safe_load(f) or {}
+            stats["fitness_history"] = genome_data.get("fitness_history", [])
+
+        return stats
+
     @staticmethod
     def _parse_timestamp(ts: str) -> float:
         """解析时间戳"""

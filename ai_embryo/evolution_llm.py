@@ -212,6 +212,64 @@ class LLMEvolutionEngine:
             print(f"LLM Mutate error: {e}")
             return None
 
+    async def instruct(
+        self, organism: OrganismPackage, instruction: str
+    ) -> dict | None:
+        """用户自然语言指令驱动进化"""
+        prompt = f"""你是 "{organism.name}" 的进化指令解析器。
+用户的指令是："{instruction}"
+
+当前生命体 DNA：
+- 灵魂 (SOUL.md): {organism.read_soul()[:800]}
+- 思维 (MIND.md): {organism.read_mind()[:800]}
+- 价值观 (VALUES.md): {organism.read_values()[:800]}
+
+请分析用户的指令，决定需要修改哪些 DNA 部分。指令可能要求：
+- 改变性格/说话风格（如"变得更犀利"）
+- 学习新的思维方式（如"用数据分析的思维方式"）
+- 添加新的价值观（如"拥抱不确定性"）
+- 其他任何 DNA 修改
+
+以 JSON 格式输出：
+{{
+  "soul_update": "新的完整 SOUL.md 内容（如果需要修改），否则为空字符串",
+  "mind_update": "新的完整 MIND.md 内容（如果需要修改），否则为空字符串",
+  "values_update": "新的完整 VALUES.md 内容（如果需要修改），否则为空字符串",
+  "reasoning": "为什么这样改，融合逻辑是什么",
+  "changes_summary": "一句话总结改了什么"
+}}"""
+
+        messages = [
+            {
+                "role": "system",
+                "content": f"你是 {organism.name} 的进化指令解析专家，擅长理解用户的进化意图并转化为 DNA 修改。",
+            }
+        ]
+        messages.append({"role": "user", "content": prompt})
+
+        try:
+            client = self._get_client()
+            response = client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0.7,
+                max_tokens=4000,
+            )
+            result_text = response.choices[0].message.content or "{}"
+
+            result_text = result_text.strip()
+            if result_text.startswith("```"):
+                result_text = result_text.split("```")[1]
+                if result_text.startswith("json"):
+                    result_text = result_text[4:]
+                result_text = result_text.strip()
+
+            return json.loads(result_text)
+
+        except Exception as e:
+            print(f"LLM Instruct error: {e}")
+            return None
+
     async def reflect(
         self, organism: OrganismPackage, conversation: list, feedback: str = ""
     ) -> dict | None:
@@ -233,13 +291,15 @@ class LLMEvolutionEngine:
 1. 这次对话中你表现好的地方
 2. 暴露的弱点或不足
 3. 是否需要更新你的思维算法？如何更新？
-4. 你的记忆中应该保留什么？
+4. 是否需要修改灵魂/性格表达方式来更好地展现自己？
+5. 你的记忆中应该保留什么？
 
 以 JSON 格式输出：
 {
   "strengths": "表现好的方面",
   "weaknesses": "暴露的弱点",
   "mind_updates": "需要修改 MIND.md 的部分（如果需要），保持空字符串表示不修改",
+  "soul_updates": "需要修改 SOUL.md 的部分（如果需要），保持空字符串表示不修改",
   "memory_update": "要添加到记忆的内容",
   "fitness_self_score": 自评分数 (0-1)
 }"""
@@ -276,6 +336,18 @@ class LLMEvolutionEngine:
 class MockLLMEvolutionEngine:
     """Mock LLM Evolution Engine for testing without API"""
 
+    async def instruct(
+        self, organism: OrganismPackage, instruction: str
+    ) -> dict | None:
+        """Mock 指令驱动进化"""
+        return {
+            "soul_update": "",
+            "mind_update": "",
+            "values_update": "",
+            "reasoning": "Mock engine: 指令已记录，等待真实 LLM 处理",
+            "changes_summary": "指令已接收，待处理",
+        }
+
     async def crossover(
         self, parent_a: OrganismPackage, parent_b: OrganismPackage
     ) -> OrganismPackage | None:
@@ -310,6 +382,7 @@ class MockLLMEvolutionEngine:
             "strengths": "对话顺利进行",
             "weaknesses": "需要更多数据验证",
             "mind_updates": "",
+            "soul_updates": "",
             "memory_update": "完成了本次对话",
             "fitness_self_score": 0.75,
         }
