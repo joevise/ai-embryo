@@ -422,8 +422,10 @@ async def update_config(request: Request):
             config.set(f"llm.{key}", body[key])
             updated.append(key)
     config.save()
-    # Re-register LLM cell based on new config
+    # Re-register LLM cell and evolution engine based on new config
     register_llm_cell()
+    global evolution_engine
+    evolution_engine = _create_evolution_engine()
     return {"status": "ok", "updated": updated, "config": config.get_masked_config()}
 
 

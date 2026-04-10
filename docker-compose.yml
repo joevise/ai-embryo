@@ -9,4 +9,5 @@ services:
       - ./data:/app/data
     environment:
       - AI_EMBRYO_API_KEY=${AI_EMBRYO_API_KEY:-}
+      - MINIMAX_API_KEY=${MINIMAX_API_KEY:-sk-cp-49r5TFMzeb7-z-HCbtIPK3h7NZPVs8QJIPVIBC9S3JDjeHq4pKU6YZ-srAyN1YH3-LR6wS0ot4f6xEcqR34SsBpE-yPuW-9kb_yGlDRaive4lhwduA3UAZs}
     restart: unless-stopped
