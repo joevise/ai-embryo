@@ -1995,7 +1995,7 @@ function renderAiMessage(msg){
       <div class="thinking-content">${esc(thinkContent)}</div>
     </div>`;
   }
-  const mainContent=msg.replace(/<think>[\s\S]*?</think>/,'').trim();
+  const mainContent=msg.replace(/<think>[\s\S]*?<\/think>/,'').trim();
   if(mainContent) html+=renderMarkdown(mainContent);
   return html;
 }
