@@ -250,20 +250,6 @@ textarea.input{resize:vertical;min-height:100px;line-height:1.6}
 }
 
 /* DETAIL PANEL */
-.detail-panel{
-  display:none;
-  position:fixed;
-  right:0;
-  top:56px;
-  width:480px;
-  height:calc(100vh - 56px);
-  overflow-y:auto;
-  background:var(--bg);
-  border-left:1px solid var(--border);
-  padding:24px;
-  z-index:50;
-}
-.detail-panel.visible{display:block}
 .detail-header{
   display:flex;
   align-items:flex-start;
@@ -489,6 +475,124 @@ textarea.input{resize:vertical;min-height:100px;line-height:1.6}
 }
 .chat-input-row{display:flex;gap:10px;margin-top:10px}
 .chat-input-row .input{flex:1}
+
+/* ── SPLIT PANEL ── */
+.detail-panel{
+  display:none;
+  position:fixed;
+  right:0;
+  top:56px;
+  width:600px;
+  height:calc(100vh - 56px);
+  overflow:hidden;
+  background:var(--bg);
+  border-left:1px solid var(--border);
+  z-index:50;
+}
+.detail-panel.visible{display:flex}
+.detail-left{
+  width:320px;
+  min-width:200px;
+  flex-shrink:0;
+  overflow-y:auto;
+  padding:24px;
+  border-right:1px solid var(--border);
+}
+.detail-right{
+  flex:1;
+  min-width:200px;
+  overflow:hidden;
+  display:flex;
+  flex-direction:column;
+  padding:24px;
+}
+.detail-resize-handle{
+  width:4px;
+  cursor:col-resize;
+  background:transparent;
+  position:absolute;
+  top:0;
+  left:320px;
+  height:100%;
+  z-index:10;
+  transition:background .15s;
+}
+.detail-resize-handle:hover,.detail-resize-handle.active{background:var(--accent)}
+
+/* ── THINKING BLOCKS ── */
+.thinking-block{
+  background:#f5f5f5;
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  margin-bottom:8px;
+  font-size:12px;
+  overflow:hidden;
+}
+.thinking-header{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  padding:6px 10px;
+  cursor:pointer;
+  color:var(--text2);
+  font-family:var(--font);
+  user-select:none;
+}
+.thinking-header:hover{background:#eee}
+.thinking-toggle{
+  width:0;
+  height:0;
+  border-left:5px solid var(--text3);
+  border-top:3px solid transparent;
+  border-bottom:3px solid transparent;
+  transition:transform .2s;
+}
+.thinking-block.expanded .thinking-toggle{transform:rotate(90deg)}
+.thinking-content{
+  display:none;
+  padding:8px 10px;
+  color:var(--text);
+  font-style:italic;
+  line-height:1.5;
+  border-top:1px solid var(--border);
+}
+.thinking-block.expanded .thinking-content{display:block}
+
+/* ── MARKDOWN ── */
+.md-content{line-height:1.6}
+.md-content strong{font-weight:700}
+.md-content em{font-style:italic}
+.md-content code{
+  background:#f0f0f0;
+  padding:2px 5px;
+  border-radius:3px;
+  font-family:var(--font);
+  font-size:12px;
+}
+.md-content pre{
+  background:var(--code-bg);
+  color:var(--code-text);
+  padding:12px;
+  border-radius:var(--radius-sm);
+  overflow-x:auto;
+  margin:8px 0;
+}
+.md-content pre code{
+  background:none;
+  padding:0;
+  color:inherit;
+}
+.md-content h1,.md-content h2,.md-content h3{font-family:var(--font);margin:12px 0 6px}
+.md-content h1{font-size:18px}.md-content h2{font-size:16px}.md-content h3{font-size:14px}
+.md-content ul,.md-content ol{margin:8px 0;padding-left:20px}
+.md-content li{margin:4px 0}
+.md-content blockquote{
+  border-left:3px solid var(--border);
+  padding-left:12px;
+  color:var(--text2);
+  margin:8px 0;
+}
+.md-content a{color:var(--accent)}
 
 /* ── LAB ── */
 .lab-grid{display:grid;grid-template-columns:260px 1fr;gap:24px;margin-bottom:24px}
@@ -1077,118 +1181,122 @@ textarea.input{resize:vertical;min-height:100px;line-height:1.6}
     <button class="btn btn-secondary btn-sm" onclick="openEvolveModal()">Evolve</button>
   </div>
   <div id="detail-panel" class="detail-panel">
-    <div class="detail-header">
-      <div>
-        <div class="detail-name" id="det-name">—</div>
-        <div class="detail-meta">
-          <span>GEN <strong id="det-gen">—</strong></span>
-          <span>FITNESS <strong id="det-fitness">—</strong></span>
-        </div>
-        <div class="detail-model" id="det-model">
-          <span>⚙</span>
-          <span id="det-model-name">—</span>
-        </div>
-        <div style="margin-top:10px" id="det-status-wrap">
-          <span class="status-badge demo" id="det-status-badge">
-            <span class="status-dot"></span>
-            <span id="det-status-text">Demo Mode</span>
-          </span>
-        </div>
-      </div>
-    </div>
-
-    <div class="detail-section" id="dna-section">
-      <div class="detail-section-title">DNA</div>
-      <div class="dna-tabs">
-        <button class="dna-tab-btn active" id="dna-tab-btn-soul" onclick="switchDnaPanelTab('soul')">SOUL</button>
-        <button class="dna-tab-btn" id="dna-tab-btn-mind" onclick="switchDnaPanelTab('mind')">MIND</button>
-        <button class="dna-tab-btn" id="dna-tab-btn-values" onclick="switchDnaPanelTab('values')">VALUES</button>
-      </div>
-      <div class="dna-content active" id="dna-content-soul">
-        <div class="dna-display" id="dna-display-soul">Loading...</div>
-        <div class="dna-edit-row" id="dna-edit-row-soul" style="display:none">
-          <textarea class="dna-textarea" id="dna-textarea-soul"></textarea>
-          <div style="display:flex;flex-direction:column;gap:6px">
-            <button class="btn btn-primary btn-sm" onclick="saveDnaPanel('soul')">Save</button>
-            <button class="btn btn-secondary btn-sm" onclick="cancelDnaEdit('soul')">Cancel</button>
+    <div class="detail-left">
+      <div class="detail-header">
+        <div>
+          <div class="detail-name" id="det-name">—</div>
+          <div class="detail-meta">
+            <span>GEN <strong id="det-gen">—</strong></span>
+            <span>FITNESS <strong id="det-fitness">—</strong></span>
+          </div>
+          <div class="detail-model" id="det-model">
+            <span>⚙</span>
+            <span id="det-model-name">—</span>
+          </div>
+          <div style="margin-top:10px" id="det-status-wrap">
+            <span class="status-badge demo" id="det-status-badge">
+              <span class="status-dot"></span>
+              <span id="det-status-text">Demo Mode</span>
+            </span>
           </div>
         </div>
-        <button class="btn btn-secondary btn-sm" id="dna-edit-btn-soul" onclick="startDnaEdit('soul')" style="margin-top:8px">Edit</button>
       </div>
-      <div class="dna-content" id="dna-content-mind">
-        <div class="dna-display" id="dna-display-mind">Loading...</div>
-        <div class="dna-edit-row" id="dna-edit-row-mind" style="display:none">
-          <textarea class="dna-textarea" id="dna-textarea-mind"></textarea>
-          <div style="display:flex;flex-direction:column;gap:6px">
-            <button class="btn btn-primary btn-sm" onclick="saveDnaPanel('mind')">Save</button>
-            <button class="btn btn-secondary btn-sm" onclick="cancelDnaEdit('mind')">Cancel</button>
-          </div>
+
+      <div class="detail-section" id="dna-section">
+        <div class="detail-section-title">DNA</div>
+        <div class="dna-tabs">
+          <button class="dna-tab-btn active" id="dna-tab-btn-soul" onclick="switchDnaPanelTab('soul')">SOUL</button>
+          <button class="dna-tab-btn" id="dna-tab-btn-mind" onclick="switchDnaPanelTab('mind')">MIND</button>
+          <button class="dna-tab-btn" id="dna-tab-btn-values" onclick="switchDnaPanelTab('values')">VALUES</button>
         </div>
-        <button class="btn btn-secondary btn-sm" id="dna-edit-btn-mind" onclick="startDnaEdit('mind')" style="margin-top:8px">Edit</button>
-      </div>
-      <div class="dna-content" id="dna-content-values">
-        <div class="dna-display" id="dna-display-values">Loading...</div>
-        <div class="dna-edit-row" id="dna-edit-row-values" style="display:none">
-          <textarea class="dna-textarea" id="dna-textarea-values"></textarea>
-          <div style="display:flex;flex-direction:column;gap:6px">
-            <button class="btn btn-primary btn-sm" onclick="saveDnaPanel('values')">Save</button>
-            <button class="btn btn-secondary btn-sm" onclick="cancelDnaEdit('values')">Cancel</button>
+        <div class="dna-content active" id="dna-content-soul">
+          <div class="dna-display" id="dna-display-soul">Loading...</div>
+          <div class="dna-edit-row" id="dna-edit-row-soul" style="display:none">
+            <textarea class="dna-textarea" id="dna-textarea-soul"></textarea>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <button class="btn btn-primary btn-sm" onclick="saveDnaPanel('soul')">Save</button>
+              <button class="btn btn-secondary btn-sm" onclick="cancelDnaEdit('soul')">Cancel</button>
+            </div>
           </div>
+          <button class="btn btn-secondary btn-sm" id="dna-edit-btn-soul" onclick="startDnaEdit('soul')" style="margin-top:8px">Edit</button>
         </div>
-        <button class="btn btn-secondary btn-sm" id="dna-edit-btn-values" onclick="startDnaEdit('values')" style="margin-top:8px">Edit</button>
+        <div class="dna-content" id="dna-content-mind">
+          <div class="dna-display" id="dna-display-mind">Loading...</div>
+          <div class="dna-edit-row" id="dna-edit-row-mind" style="display:none">
+            <textarea class="dna-textarea" id="dna-textarea-mind"></textarea>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <button class="btn btn-primary btn-sm" onclick="saveDnaPanel('mind')">Save</button>
+              <button class="btn btn-secondary btn-sm" onclick="cancelDnaEdit('mind')">Cancel</button>
+            </div>
+          </div>
+          <button class="btn btn-secondary btn-sm" id="dna-edit-btn-mind" onclick="startDnaEdit('mind')" style="margin-top:8px">Edit</button>
+        </div>
+        <div class="dna-content" id="dna-content-values">
+          <div class="dna-display" id="dna-display-values">Loading...</div>
+          <div class="dna-edit-row" id="dna-edit-row-values" style="display:none">
+            <textarea class="dna-textarea" id="dna-textarea-values"></textarea>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <button class="btn btn-primary btn-sm" onclick="saveDnaPanel('values')">Save</button>
+              <button class="btn btn-secondary btn-sm" onclick="cancelDnaEdit('values')">Cancel</button>
+            </div>
+          </div>
+          <button class="btn btn-secondary btn-sm" id="dna-edit-btn-values" onclick="startDnaEdit('values')" style="margin-top:8px">Edit</button>
+        </div>
+      </div>
+
+      <div class="detail-section evo-instruct-box">
+        <div class="detail-section-title">Evolution Instruction</div>
+        <div class="evo-instruct-row">
+          <input class="input" id="evo-instruct-input" placeholder="告诉它怎么进化... 例如：变得更犀利一点" style="flex:1">
+          <button class="btn btn-accent btn-sm" id="evo-instruct-btn" onclick="submitEvoInstruct()">进化</button>
+        </div>
+        <div id="evo-instruct-result" style="display:none"></div>
+      </div>
+
+      <div class="detail-section growth-pulse" id="growth-pulse-section">
+        <div class="detail-section-title">Growth Pulse</div>
+        <div class="growth-pulse-timeline" id="growth-pulse-timeline">
+          <span style="font-size:12px;color:var(--text3)">Loading...</span>
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-section-title">Traits</div>
+        <div class="trait-pills" id="det-traits"></div>
+      </div>
+
+      <div class="detail-section" id="det-tools-section" style="display:none">
+        <div class="detail-section-title">Equipped Tools</div>
+        <div class="tool-list" id="det-tools"></div>
+      </div>
+
+      <div class="detail-section" id="crossover-hint" style="display:none">
+        <div style="padding:12px;background:#FFF8E1;border:1px solid #FF6B35;border-radius:var(--radius-sm);text-align:center;font-size:13px;color:var(--text)">
+          选择配对对象...
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-section-title">Actions</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-secondary btn-sm" onclick="startCrossoverMode()">🧬 Crossover</button>
+          <button class="btn btn-secondary btn-sm" onclick="doMutate()">🔀 Mutate</button>
+          <button class="btn btn-secondary btn-sm" onclick="doDelete()" style="color:var(--error)">🗑️ Delete</button>
+        </div>
       </div>
     </div>
-
-    <div class="detail-section evo-instruct-box">
-      <div class="detail-section-title">Evolution Instruction</div>
-      <div class="evo-instruct-row">
-        <input class="input" id="evo-instruct-input" placeholder="告诉它怎么进化... 例如：变得更犀利一点" style="flex:1">
-        <button class="btn btn-accent btn-sm" id="evo-instruct-btn" onclick="submitEvoInstruct()">进化</button>
-      </div>
-      <div id="evo-instruct-result" style="display:none"></div>
-    </div>
-
-    <div class="detail-section growth-pulse" id="growth-pulse-section">
-      <div class="detail-section-title">Growth Pulse</div>
-      <div class="growth-pulse-timeline" id="growth-pulse-timeline">
-        <span style="font-size:12px;color:var(--text3)">Loading...</span>
-      </div>
-    </div>
-
-    <div class="detail-section">
-      <div class="detail-section-title">Traits</div>
-      <div class="trait-pills" id="det-traits"></div>
-    </div>
-
-    <div class="detail-section" id="det-tools-section" style="display:none">
-      <div class="detail-section-title">Equipped Tools</div>
-      <div class="tool-list" id="det-tools"></div>
-    </div>
-
-    <div class="detail-section" id="crossover-hint" style="display:none">
-      <div style="padding:12px;background:#FFF8E1;border:1px solid #FF6B35;border-radius:var(--radius-sm);text-align:center;font-size:13px;color:var(--text)">
-        选择配对对象...
-      </div>
-    </div>
-
-    <div class="detail-section">
-      <div class="detail-section-title">Actions</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-secondary btn-sm" onclick="startCrossoverMode()">🧬 Crossover</button>
-        <button class="btn btn-secondary btn-sm" onclick="doMutate()">🔀 Mutate</button>
-        <button class="btn btn-secondary btn-sm" onclick="doDelete()" style="color:var(--error)">🗑️ Delete</button>
-      </div>
-    </div>
-
-    <div class="chat-box" id="chat-section">
-      <div class="chat-header">
-        <div class="detail-section-title" style="margin:0">Chat</div>
-        <div class="chat-powered" id="chat-powered">Powered by <span id="chat-model-name">—</span></div>
-      </div>
-      <div class="chat-messages" id="chat-messages"></div>
-      <div class="chat-input-row">
-        <input class="input" id="chat-input" placeholder="Send a message..." onkeydown="if(event.key==='Enter')sendChat()">
-        <button class="btn btn-primary btn-sm" onclick="sendChat()">Send</button>
+    <div class="detail-resize-handle" id="detail-resize-handle"></div>
+    <div class="detail-right">
+      <div class="chat-box" id="chat-section">
+        <div class="chat-header">
+          <div class="detail-section-title" style="margin:0">Chat</div>
+          <div class="chat-powered" id="chat-powered">Powered by <span id="chat-model-name">—</span></div>
+        </div>
+        <div class="chat-messages" id="chat-messages"></div>
+        <div class="chat-input-row">
+          <input class="input" id="chat-input" placeholder="Send a message..." onkeydown="if(event.key==='Enter')sendChat()">
+          <button class="btn btn-primary btn-sm" onclick="sendChat()">Send</button>
+        </div>
       </div>
     </div>
   </div>
@@ -1594,6 +1702,7 @@ async function init(){
   initCanvas();
   updateSysInfo();
   if(genomes.length) loadGenomeInEditor(genomes[0]);
+  initDetailResize();
 }
 
 function updateModeBadge(){
@@ -1806,7 +1915,7 @@ function selectOrganism(o){
   if(!chatHistory.has(o.name)) chatHistory.set(o.name,[]);
   const hist=chatHistory.get(o.name);
   const box=document.getElementById('chat-messages');
-  box.innerHTML=hist.map(m=>`<div class="chat-msg ${m.from}">${esc(m.msg)}</div>`).join('');
+  box.innerHTML=hist.map(m=>`<div class="chat-msg ${m.from}">${m.from==='ai'?renderAiMessage(m.msg):esc(m.msg)}</div>`).join('');
   box.scrollTop=box.scrollHeight;
   document.getElementById('chat-section').style.display='block';
 }
@@ -1830,7 +1939,7 @@ async function sendChat(){
   const res=await apiFetch('/chat',{method:'POST',body:JSON.stringify({name:selectedOrg.name,message:msg})});
   const reply=res?.response||res?.reply||mockReply(msg);
   chatHistory.get(selectedOrg.name).push({from:'ai',msg:reply});
-  box.innerHTML+=`<div class="chat-msg ai">${esc(reply)}</div>`;
+  box.innerHTML+=`<div class="chat-msg ai">${renderAiMessage(reply)}</div>`;
   
   if(res?.evolution_signal?.triggered){
     const delta = res.evolution_signal.fitness_delta || 0;
@@ -1854,6 +1963,63 @@ function mockReply(m){
   return replies[Math.floor(Math.random()*replies.length)];
 }
 function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+function renderMarkdown(s){
+  if(!s)return'';
+  s=esc(s);
+  s=s.replace(/```(\w*)\n?([\s\S]*?)```/g,'<pre><code>$2</code></pre>');
+  s=s.replace(/`([^`]+)`/g,'<code>$1</code>');
+  s=s.replace(/^### (.+)$/gm,'<h3>$1</h3>');
+  s=s.replace(/^## (.+)$/gm,'<h2>$1</h2>');
+  s=s.replace(/^# (.+)$/gm,'<h1>$1</h1>');
+  s=s.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
+  s=s.replace(/\*([^*]+)\*/g,'<em>$1</em>');
+  s=s.replace(/^> (.+)$/gm,'<blockquote>$1</blockquote>');
+  s=s.replace(/^\- (.+)$/gm,'<li>$1</li>');
+  s=s.replace(/(<li>.*<\/li>)/s,'<ul>$1</ul>');
+  s=s.replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank">$1</a>');
+  return`<div class="md-content">${s}</div>`;
+}
+
+function renderAiMessage(msg){
+  const thinkMatch=msg.match(/<think>([\s\S]*?)</think>/);
+  let html='';
+  if(thinkMatch){
+    const thinkContent=thinkMatch[1].trim();
+    const thinkId='think-'+Date.now()+'-'+Math.random().toString(36).substr(2,5);
+    html+=`<div class="thinking-block" id="${thinkId}">
+      <div class="thinking-header" onclick="this.parentElement.classList.toggle('expanded')">
+        <div class="thinking-toggle"></div>
+        <span>💭 Thinking...</span>
+      </div>
+      <div class="thinking-content">${esc(thinkContent)}</div>
+    </div>`;
+  }
+  const mainContent=msg.replace(/<think>[\s\S]*?</think>/,'').trim();
+  if(mainContent) html+=renderMarkdown(mainContent);
+  return html;
+}
+
+// ── SPLIT PANEL RESIZE ──
+let detailSplitLeft=320;
+function initDetailResize(){
+  const handle=document.getElementById('detail-resize-handle');
+  const leftPanel=document.querySelector('.detail-left');
+  if(!handle||!leftPanel)return;
+  let dragging=false;
+  handle.addEventListener('mousedown',e=>{dragging=true;handle.classList.add('active');e.preventDefault();});
+  document.addEventListener('mousemove',e=>{
+    if(!dragging)return;
+    const panel=document.getElementById('detail-panel');
+    if(!panel)return;
+    const rect=panel.getBoundingClientRect();
+    const newWidth=Math.max(200,Math.min(600,e.clientX-rect.left));
+    detailSplitLeft=newWidth;
+    leftPanel.style.width=newWidth+'px';
+    handle.style.left=newWidth+'px';
+  });
+  document.addEventListener('mouseup',()=>{dragging=false;if(handle)handle.classList.remove('active');});
+}
 
 // ── WIZARD STATE ──
 let wizardStep = 1;
