@@ -1982,7 +1982,7 @@ function renderMarkdown(s){
 }
 
 function renderAiMessage(msg){
-  const thinkMatch=msg.match(/<think>([\s\S]*?)</think>/);
+  const thinkMatch=msg.match(/<think>([\s\S]*?)<\/think>/);
   let html='';
   if(thinkMatch){
     const thinkContent=thinkMatch[1].trim();
