@@ -1157,16 +1157,15 @@ async def auto_train_organism(name: str, request: Request):
                 challenge_messages = [
                     {
                         "role": "system",
-                        "content": f"""你是AI训练挑战生成专家。基于训练方向生成一个有挑战性的问题来测试AI的能力。
-
-训练方向: {direction}
-
-请生成一个问题来测试AI在"{direction}"方面的能力。
+                        "content": "你是AI训练挑战生成专家。根据用户给出的训练方向生成一个有挑战性的测试问题。只输出JSON格式。",
+                    },
+                    {
+                        "role": "user",
+                        "content": f"""训练方向: {direction}
+第{round_num}轮（共{rounds}轮），请生成一个问题来测试AI在"{direction}"方面的能力。
 以JSON格式输出:
-{{"challenge": "一个具体的测试问题或场景，要求清晰、有挑战性"}}
-
-只输出JSON，不要其他文字。""",
-                    }
+{{"challenge": "一个具体的测试问题或场景，要求清晰、有挑战性"}}""",
+                    },
                 ]
                 challenge_resp = await _call_llm(
                     challenge_messages, temperature=0.7, max_tokens=1000
@@ -1195,10 +1194,14 @@ async def auto_train_organism(name: str, request: Request):
                 judge_messages = [
                     {
                         "role": "system",
-                        "content": f"""你是AI能力评判专家。请评估AI对以下挑战的回答。
+                        "content": "你是AI能力评判专家。根据用户提供的挑战和回答进行评分。只输出JSON格式。",
+                    },
+                    {
+                        "role": "user",
+                        "content": f"""请评估AI对以下挑战的回答。
 
 挑战: {challenge}
-回答: {response_text}
+回答: {response_text[:2000]}
 
 请从以下维度评分(0-1)：
 - depth: 深度，是否深入分析
@@ -1208,10 +1211,8 @@ async def auto_train_organism(name: str, request: Request):
 - creativity: 创意，是否有创新
 
 以JSON格式输出:
-{{"score": 0.0-1.0, "depth": 0.0-1.0, "clarity": 0.0-1.0, "insight": 0.0-1.0, "relevance": 0.0-1.0, "creativity": 0.0-1.0, "weak_areas": "需要改进的地方", "evolution_suggestion": "如何进化DNA来改进"}}
-
-只输出JSON。""",
-                    }
+{{"score": 0.0-1.0, "depth": 0.0-1.0, "clarity": 0.0-1.0, "insight": 0.0-1.0, "relevance": 0.0-1.0, "creativity": 0.0-1.0, "weak_areas": "需要改进的地方", "evolution_suggestion": "如何进化DNA来改进"}}""",
+                    },
                 ]
                 judge_resp = await _call_llm(
                     judge_messages, temperature=0.5, max_tokens=1500
