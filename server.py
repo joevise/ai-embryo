@@ -31,7 +31,11 @@ from ai_embryo import (
 )
 from ai_embryo.config_manager import ConfigManager
 from ai_embryo.organism_package import OrganismPackage
-from ai_embryo.evolution_llm import LLMEvolutionEngine, MockLLMEvolutionEngine
+from ai_embryo.evolution_llm import (
+    LLMEvolutionEngine,
+    MockLLMEvolutionEngine,
+    _parse_llm_json,
+)
 
 # ── Configuration ──────────────────────────────────────────
 
@@ -1061,7 +1065,9 @@ async def instruct_organism(name: str, request: Request):
                     changes["mind"] = result["mind_update"]
                 if result.get("values_update"):
                     current = pkg.read_values()
-                    pkg.write_values(current + f"\n\n# 进化更新\n{result['values_update']}")
+                    pkg.write_values(
+                        current + f"\n\n# 进化更新\n{result['values_update']}"
+                    )
                     changes["values"] = result["values_update"]
 
             if changes:
@@ -1107,11 +1113,171 @@ def _get_or_create_package(name: str) -> OrganismPackage | None:
         mind = org.genome.identity.get("mind", {})
         if mind:
             import json as _json
-            pkg.write_mind(f"# 思维系统\n\n```yaml\n{yaml.dump(mind, allow_unicode=True)}```")
+
+            pkg.write_mind(
+                f"# 思维系统\n\n```yaml\n{yaml.dump(mind, allow_unicode=True)}```"
+            )
     except Exception:
         pass
     package_store[name] = pkg
     return pkg
+
+
+@app.post("/api/organisms/{name}/auto-train")
+async def auto_train_organism(name: str, request: Request):
+    """Auto-train an organism through self-directed evolution rounds."""
+    pkg = _get_or_create_package(name)
+    if not pkg:
+        raise HTTPException(status_code=404, detail=f"Organism '{name}' not found")
+
+    body = await request.json()
+    direction = body.get("direction", "")
+    rounds = body.get("rounds", 5)
+
+    if not direction:
+        raise HTTPException(status_code=400, detail="direction is required")
+
+    async def event_stream():
+        try:
+            system_prompt = pkg.compile_system_prompt()
+
+            async def _call_llm(messages, temperature=0.7, max_tokens=2000):
+                if not _has_any_api_key():
+                    return {"choices": [{"message": {"content": "{}"}}]}
+                client = RealLLMCell({"system_prompt": ""})._get_client()
+                response = client.chat.completions.create(
+                    model=config.get("llm.model", "MiniMax-M2.7"),
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+                return response
+
+            for round_num in range(1, rounds + 1):
+                challenge_messages = [
+                    {
+                        "role": "system",
+                        "content": f"""你是AI训练挑战生成专家。基于训练方向生成一个有挑战性的问题来测试AI的能力。
+
+训练方向: {direction}
+
+请生成一个问题来测试AI在"{direction}"方面的能力。
+以JSON格式输出:
+{{"challenge": "一个具体的测试问题或场景，要求清晰、有挑战性"}}
+
+只输出JSON，不要其他文字。""",
+                    }
+                ]
+                challenge_resp = await _call_llm(
+                    challenge_messages, temperature=0.7, max_tokens=1000
+                )
+                challenge_text = challenge_resp.choices[0].message.content or "{}"
+                try:
+                    challenge_data = _parse_llm_json(challenge_text)
+                except Exception:
+                    challenge_data = {
+                        "challenge": f"测试挑战 {round_num}：谈谈{direction}"
+                    }
+                challenge = challenge_data.get("challenge", f"关于{direction}的问题")
+
+                response_messages = []
+                if system_prompt:
+                    response_messages.append(
+                        {"role": "system", "content": system_prompt}
+                    )
+                response_messages.append({"role": "user", "content": challenge})
+                response_resp = await _call_llm(
+                    response_messages, temperature=0.5, max_tokens=2000
+                )
+                response_text = response_resp.choices[0].message.content or ""
+                response_preview = response_text[:200] if response_text else ""
+
+                judge_messages = [
+                    {
+                        "role": "system",
+                        "content": f"""你是AI能力评判专家。请评估AI对以下挑战的回答。
+
+挑战: {challenge}
+回答: {response_text}
+
+请从以下维度评分(0-1)：
+- depth: 深度，是否深入分析
+- clarity: 清晰度，表达是否清楚
+- insight: 洞察力，是否有独到见解
+- relevance: 相关性，是否切题
+- creativity: 创意，是否有创新
+
+以JSON格式输出:
+{{"score": 0.0-1.0, "depth": 0.0-1.0, "clarity": 0.0-1.0, "insight": 0.0-1.0, "relevance": 0.0-1.0, "creativity": 0.0-1.0, "weak_areas": "需要改进的地方", "evolution_suggestion": "如何进化DNA来改进"}}
+
+只输出JSON。""",
+                    }
+                ]
+                judge_resp = await _call_llm(
+                    judge_messages, temperature=0.5, max_tokens=1500
+                )
+                judge_text = judge_resp.choices[0].message.content or "{}"
+                try:
+                    judge_data = _parse_llm_json(judge_text)
+                except Exception:
+                    judge_data = {
+                        "score": 0.5,
+                        "depth": 0.5,
+                        "clarity": 0.5,
+                        "insight": 0.5,
+                        "relevance": 0.5,
+                        "creativity": 0.5,
+                    }
+
+                score = judge_data.get("score", 0.5)
+                dimensions = {
+                    "depth": judge_data.get("depth", 0.5),
+                    "clarity": judge_data.get("clarity", 0.5),
+                    "insight": judge_data.get("insight", 0.5),
+                    "relevance": judge_data.get("relevance", 0.5),
+                    "creativity": judge_data.get("creativity", 0.5),
+                }
+                weak_areas = judge_data.get("weak_areas", "")
+                evolution_suggestion = judge_data.get("evolution_suggestion", "")
+
+                if evolution_suggestion and len(evolution_suggestion) > 10:
+                    mind_append = f"\n\n## 第{round_num}轮训练改进\n挑战: {challenge}\n弱项: {weak_areas}\n建议: {evolution_suggestion}"
+                    current_mind = pkg.read_mind()
+                    pkg.write_mind(current_mind + mind_append)
+                    evolution_note = f"改进: {weak_areas[:50]}"
+                else:
+                    evolution_note = "维持当前水平"
+
+                old_fitness = pkg.fitness
+                pkg.fitness = old_fitness * 0.7 + score * 0.3
+
+                round_data = {
+                    "round": round_num,
+                    "total": rounds,
+                    "challenge": challenge,
+                    "response_preview": response_preview,
+                    "score": round(score, 4),
+                    "dimensions": {k: round(v, 4) for k, v in dimensions.items()},
+                    "evolution_note": evolution_note,
+                    "fitness": round(pkg.fitness, 4),
+                }
+                yield f"data: {json.dumps(round_data, ensure_ascii=False)}\n\n"
+                await asyncio.sleep(0.3)
+
+            improvements = []
+            pkg.save()
+            final_data = {
+                "done": True,
+                "final_fitness": round(pkg.fitness, 4),
+                "rounds_completed": rounds,
+                "improvements": improvements,
+            }
+            yield f"data: {json.dumps(final_data, ensure_ascii=False)}\n\n"
+        except Exception as e:
+            error_data = {"error": str(e)}
+            yield f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @app.get("/api/organisms/{name}/evolution")
